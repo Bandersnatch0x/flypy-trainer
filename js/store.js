@@ -34,7 +34,7 @@ function flushKeys() {
 }
 
 export const store = {
-  getSettings: () => load('settings', { hintLevel: 'full', showPy: true, showCode: true, hlKeys: true }),
+  getSettings: () => load('settings', { hintLevel: 'full', showPy: true, showCode: true, hlKeys: true, keyImpact: true }),
   setSettings: (s) => save('settings', s),
 
   // 按库存储，支持逐库删除；练习池 = 全部库合并

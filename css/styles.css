@@ -281,11 +281,36 @@ h2 { font-size: 1.12rem; font-weight: 600; margin: 28px 0 12px; color: var(--bon
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05);
   border-bottom-width: 1px;
 }
+.key.key-impact {
+  animation: keyImpact 0.16s var(--ease);
+}
+@keyframes keyImpact {
+  0% { transform: translateY(0) scale(1); }
+  30% { transform: translateY(3px) scale(0.92); filter: brightness(1.2); }
+  65% { transform: translateY(-1.5px) scale(1.05); }
+  100% { transform: translateY(0) scale(1); }
+}
 .key.errflash {
   background: linear-gradient(180deg, #d86258 0%, #c4574e 100%) !important;
   border-color: #c4574e !important; box-shadow: 0 0 14px var(--rust-glow) !important;
 }
 .key.errflash .sm, .key.errflash .ym { color: #fff !important; }
+
+/* 舞台击键反冲震荡 */
+.stage.recoil {
+  animation: stageRecoil 0.08s ease-out;
+}
+@keyframes stageRecoil {
+  0% { transform: translateY(0); }
+  40% { transform: translateY(1.2px); }
+  100% { transform: translateY(0); }
+}
+
+/* 全屏打击粒子层 */
+.impact-canvas {
+  position: fixed; inset: 0; width: 100vw; height: 100vh;
+  pointer-events: none; z-index: 15;
+}
 
 /* 热力图键盘 */
 .kb.heat { background: transparent; backdrop-filter: none; box-shadow: none; border: none; padding: 6px 0; }

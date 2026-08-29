@@ -197,6 +197,87 @@ function trackWrongWord() {
   }
 }
 
+// ================= 击键震荡与打击粒子引擎 =================
+const canvas = /** @type {HTMLCanvasElement} */ ($('impactCanvas'));
+const ctx = canvas ? canvas.getContext('2d') : null;
+let particles = [], shockwaves = [], animFrame = null;
+
+function resizeCanvas() {
+  if (!canvas) return;
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+class Particle {
+  constructor(x, y, color, speedMul = 1) {
+    this.x = x; this.y = y;
+    const angle = Math.random() * Math.PI * 2;
+    const speed = (Math.random() * 3 + 2) * speedMul;
+    this.vx = Math.cos(angle) * speed;
+    this.vy = Math.sin(angle) * speed - 1.2;
+    this.alpha = 1;
+    this.size = Math.random() * 3 + 1.8;
+    this.color = color;
+    this.decay = Math.random() * 0.035 + 0.025;
+    this.gravity = 0.12;
+  }
+  update() {
+    this.x += this.vx; this.y += this.vy;
+    this.vy += this.gravity; this.vx *= 0.96;
+    this.alpha -= this.decay;
+  }
+  draw(c) {
+    if (this.alpha <= 0) return;
+    c.save(); c.globalAlpha = Math.max(0, this.alpha);
+    c.fillStyle = this.color; c.beginPath();
+    c.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+    c.fill(); c.restore();
+  }
+}
+
+class Shockwave {
+  constructor(x, y, color) {
+    this.x = x; this.y = y; this.r = 6;
+    this.alpha = 0.85; this.color = color;
+  }
+  update() { this.r += 2.2; this.alpha *= 0.86; }
+  draw(c) {
+    if (this.alpha <= 0.02) return;
+    c.save(); c.globalAlpha = this.alpha;
+    c.strokeStyle = this.color; c.lineWidth = 2;
+    c.beginPath(); c.arc(this.x, this.y, this.r, 0, Math.PI * 2);
+    c.stroke(); c.restore();
+  }
+}
+
+function renderParticles() {
+  if (!ctx) return;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  for (let i = shockwaves.length - 1; i >= 0; i--) {
+    shockwaves[i].update(); shockwaves[i].draw(ctx);
+    if (shockwaves[i].alpha <= 0.02) shockwaves.splice(i, 1);
+  }
+  for (let i = particles.length - 1; i >= 0; i--) {
+    particles[i].update(); particles[i].draw(ctx);
+    if (particles[i].alpha <= 0) particles.splice(i, 1);
+  }
+  if (particles.length > 0 || shockwaves.length > 0) animFrame = requestAnimationFrame(renderParticles);
+  else animFrame = null;
+}
+
+function triggerImpact(x, y, isBig = false) {
+  const colors = ['#D96C4F', '#EDEDEF', '#7FA98C', '#E47A5F'];
+  const count = isBig ? 16 : 7;
+  for (let i = 0; i < count; i++) {
+    const col = colors[Math.floor(Math.random() * colors.length)];
+    particles.push(new Particle(x, y, col, isBig ? 1.3 : 1));
+  }
+  shockwaves.push(new Shockwave(x, y, isBig ? '#7FA98C' : '#D96C4F'));
+  if (!animFrame) animFrame = requestAnimationFrame(renderParticles);
+}
+
 function onInput() {
   if (!queue.length || idx >= queue.length || !$('result').classList.contains('hidden')) return;
   if (!startTime) { startTime = Date.now(); timer = setInterval(tick, 500); }
@@ -211,10 +292,35 @@ function onInput() {
     pos++;
     $('fb').textContent = '';
     const el = keyEls[ch];
-    if (el) { el.classList.add('pressed'); setTimeout(() => el.classList.remove('pressed'), 90); }
+    const settings = store.getSettings();
+    if (el) {
+      el.classList.add('pressed'); setTimeout(() => el.classList.remove('pressed'), 90);
+      if (settings.keyImpact !== false) {
+        el.classList.remove('key-impact');
+        void el.offsetWidth;
+        el.classList.add('key-impact');
+        const rect = el.getBoundingClientRect();
+        triggerImpact(rect.left + rect.width / 2, rect.top + rect.height / 2, false);
+      }
+    }
+    if (settings.keyImpact !== false) {
+      const st = /** @type {HTMLElement|null} */ (document.querySelector('.stage'));
+      if (st) {
+        st.classList.remove('recoil');
+        void st.offsetWidth;
+        st.classList.add('recoil');
+      }
+    }
     if (pos >= expected.length) {
       idx++;
       $('sDone').textContent = `${idx}/${queue.length}`;
+      if (settings.keyImpact !== false) {
+        const wEl = $('word');
+        if (wEl) {
+          const rect = wEl.getBoundingClientRect();
+          triggerImpact(rect.left + rect.width / 2, rect.top + rect.height / 2, true);
+        }
+      }
       const w = $('word');
       w.classList.add('fade');
       setTimeout(() => { w.classList.remove('fade'); next(); }, 60);
@@ -505,9 +611,10 @@ function loadSettingsUI() {
   $('setPy').checked = s.showPy;
   $('setCode').checked = s.showCode;
   $('setHl').checked = s.hlKeys;
+  $('setImpact').checked = s.keyImpact !== false;
   qsa('input[name="hintSet"]').forEach(r => { r.checked = r.value === s.hintLevel; });
 }
-for (const [id, key] of [['setPy', 'showPy'], ['setCode', 'showCode'], ['setHl', 'hlKeys']]) {
+for (const [id, key] of [['setPy', 'showPy'], ['setCode', 'showCode'], ['setHl', 'hlKeys'], ['setImpact', 'keyImpact']]) {
   $(id).addEventListener('change', (e) => {
     const s = store.getSettings();
     s[key] = e.target.checked;
