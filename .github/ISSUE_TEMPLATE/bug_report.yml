@@ -1,0 +1,49 @@
+name: 问题反馈
+description: 练习、导入、统计等功能异常或视觉问题
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: input
+    id: url
+    attributes:
+      label: 访问地址
+      description: 出问题的网址（线上或本地）
+      value: https://flypy-trainer.vercel.app
+    validations:
+      required: true
+  - type: dropdown
+    id: view
+    attributes:
+      label: 出问题的页面
+      options:
+        - 练习
+        - 课程
+        - 导入
+        - 统计
+        - 错词本
+        - 设置
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: 复现步骤
+      placeholder: |
+        1. 打开…
+        2. 输入…
+        3. 看到…
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望行为
+    validations:
+      required: true
+  - type: textarea
+    id: env
+    attributes:
+      label: 环境
+      placeholder: 浏览器与版本、操作系统；导入问题请注明文件格式（userdb.txt / dict.yaml / 纯文本 / custom_phrase）
+    validations:
+      required: false
