@@ -1,5 +1,5 @@
 // 方案注册表：键位表译自 iDvel/rime-ice 官方 schema algebra 段（ADR-0005）
-import { normalizeSyllable, splitSyllable, splitPinyin } from './flypy.js';
+import { normalizeSyllable, splitSyllable, splitPinyin, YM as FLYPY_YM, SM_KEYS as FLYPY_SM, SM_NAME as FLYPY_SMN } from './flypy.js';
 
 function makeScheme(cfg) {
   const keyPlan = (sylIn) => {
@@ -43,14 +43,10 @@ const ID = { i: 'i', u: 'u', v: 'v' };
 export const SCHEMES = {
   flypy: makeScheme({
     id: 'flypy', name: '小鹤双拼', zero: 'first', jqxyV: true, ROWS: ROWS3,
-    SM_KEYS: { zh: 'v', ch: 'i', sh: 'u' }, SM_NAME: { v: 'zh', i: 'ch', u: 'sh' },
-    YM: { iu: 'q', ei: 'w', uan: 'r', er: 'r', ue: 't', ve: 't', un: 'y', uo: 'o', ie: 'p',
-      ong: 's', iong: 's', ing: 'k', uai: 'k', ai: 'd', en: 'f', eng: 'g', iang: 'l',
-      uang: 'l', ang: 'h', ian: 'm', an: 'j', ou: 'z', a: 'a', o: 'o', e: 'e', ia: 'x',
-      ua: 'x', ao: 'c', ui: 'v', in: 'b', iao: 'n', ...ID },
+    SM_KEYS: FLYPY_SM, SM_NAME: FLYPY_SMN, YM: FLYPY_YM,
   }),
   mspy: makeScheme({
-    id: 'mspy', name: '微软双拼', zero: 'first', jqxyV: true, ROWS: ROWS3, extraKeys: [';'],
+    id: 'mspy', name: '微软双拼', zero: 'o', jqxyV: true, ROWS: ROWS3, extraKeys: [';'],
     SM_KEYS: { zh: 'v', ch: 'i', sh: 'u' }, SM_NAME: { v: 'zh', i: 'ch', u: 'sh' },
     YM: { ...ID, iu: 'q', ia: 'w', ua: 'w', uan: 'r', er: 'r', ue: 't', ve: 't', uo: 'o',
       uai: 'y', v: 'y', ong: 's', iong: 's', iang: 'd', uang: 'd', en: 'f', eng: 'g',
@@ -58,7 +54,7 @@ export const SCHEMES = {
       ou: 'b', in: 'n', ing: ';', un: 'p' },
   }),
   sogou: makeScheme({
-    id: 'sogou', name: '搜狗双拼', zero: 'first', jqxyV: true, ROWS: ROWS3, extraKeys: [';'],
+    id: 'sogou', name: '搜狗双拼', zero: 'o', jqxyV: true, ROWS: ROWS3, extraKeys: [';'],
     SM_KEYS: { zh: 'v', ch: 'i', sh: 'u' }, SM_NAME: { v: 'zh', i: 'ch', u: 'sh' },
     YM: { ...ID, iu: 'q', ia: 'w', ua: 'w', uan: 'r', er: 'r', ue: 't', ve: 't', uo: 'o',
       uai: 'y', v: 'y', ong: 's', iong: 's', iang: 'd', uang: 'd', en: 'f', eng: 'g',
@@ -68,10 +64,10 @@ export const SCHEMES = {
   abc: makeScheme({
     id: 'abc', name: '智能ABC', zero: 'o', jqxyV: false, ROWS: ROWS3,
     SM_KEYS: { zh: 'a', ch: 'e', sh: 'v' }, SM_NAME: { a: 'zh', e: 'ch', v: 'sh' },
-    YM: { ei: 'q', ian: 'w', er: 'r', iu: 'r', iang: 't', uang: 't', ing: 'y', uo: 'o',
+    YM: { ...ID, ei: 'q', ian: 'w', er: 'r', iu: 'r', iang: 't', uang: 't', ing: 'y', uo: 'o',
       uan: 'p', ong: 's', iong: 's', ia: 'd', ua: 'd', en: 'f', eng: 'g', ang: 'h',
       an: 'j', iao: 'z', ao: 'k', in: 'c', uai: 'c', ai: 'l', ie: 'x', ou: 'b', un: 'n',
-      ve: 'm', ui: 'm', ...ID },
+      ve: 'm', ue: 'm', ui: 'm' },
   }),
 };
 

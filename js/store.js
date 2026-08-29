@@ -70,6 +70,12 @@ export const store = {
     save('days', days);
   },
   getDays: () => load('days', {}),
+  markCourseSeen() {
+    const d = new Date().toDateString();
+    const days = load('days', {});
+    days[d] = Object.assign({ keys: 0, errs: 0, sessions: 0 }, days[d], { course: 1 });
+    save('days', days);
+  },
 
   addKey(k, ok) {
     const c = keyBuf[k] || [0, 0];

@@ -1,5 +1,5 @@
 import { BUILTIN } from './data.js';
-import { getScheme, SCHEME_LIST } from './schemes.js';
+import { getScheme, SCHEME_LIST, SCHEMES } from './schemes.js';
 import { sniffAndParse, mergeEntries, weightedSample, parsePlain } from './parsers.js';
 import { store } from './store.js';
 import { sound } from './sound.js';
@@ -104,28 +104,36 @@ const SESSION_LEN = 20;
 const SPRINT_SECS = 60;
 let queue = [], idx = 0, plans = [], expected = '', pos = 0;
 let startTime = 0, timer = null, correctKeys = 0, wrongKeys = 0;
-let mode = 'chars', drillKey = '', wrongInWord = false;
+let mode = 'chars', drillKey = '', drillSeq = [], combo = 0, wrongInWord = false;
 let hintLevel = store.getSettings().hintLevel || 'full';
 let wrongWordsThisSession = new Set();
 
-const SENTENCES = (() => { // 二字词两两连句
+const SENTENCES = (() => { // 二字词连句（2-3 词）
   const out = [];
   const w = BUILTIN.words2;
   for (let i = 0; i + 1 < w.length; i += 2) {
     out.push({ word: w[i].w + w[i + 1].w, py: `${w[i].p} ${w[i + 1].p}`, code: '', weight: 1 });
   }
+  for (let i = 0; i + 2 < w.length; i += 3) {
+    out.push({ word: w[i].w + w[i + 1].w + w[i + 2].w, py: `${w[i].p} ${w[i + 1].p} ${w[i + 2].p}`, code: '', weight: 1 });
+  }
   return out;
 })();
 
-const CONFUS = [['in', 'ing'], ['an', 'ang'], ['en', 'eng'], ['zh', 'z'], ['ch', 'c'], ['sh', 's']];
-function confusKeys(pair) {
-  const a = pair[0], b = pair[1];
-  return [scheme.SM_KEYS[a] || scheme.YM[a] || a, scheme.SM_KEYS[b] || scheme.YM[b] || b];
+const CONFUS = [
+  ['ym', 'in', 'ing'], ['ym', 'an', 'ang'], ['ym', 'en', 'eng'],
+  ['sm', 'zh', 'z'], ['sm', 'ch', 'c'], ['sm', 'sh', 's'],
+];
+function confusKeys(triple) {
+  const role = triple[0];
+  const keys = [triple[1], triple[2]].map(n => scheme.SM_KEYS[n] || scheme.YM[n] || n);
+  return { role, keys };
 }
-function entryTouchesKey(e, keys) {
+function entryTouchesKey(e, role, keys) {
   return (e.py || '').split(/\s+/).some(s => {
     const pl = keyPlan(s);
-    return pl && (keys.includes(pl.smKey) || keys.includes(pl.ymKey));
+    if (!pl) return false;
+    return role === 'sm' ? keys.includes(pl.smKey) : keys.includes(pl.ymKey);
   });
 }
 
@@ -135,11 +143,11 @@ function poolFor(m) {
   const bi = (arr) => arr.map(({ w, p }) => ({ word: w, py: p, code: '', weight: 1 }));
   if (m.startsWith('weak:')) {
     const k = m.slice(5);
-    return [...bi(BUILTIN.chars), ...imported].filter(e => entryTouchesKey(e, [k]));
+    return [...bi(BUILTIN.chars), ...imported].filter(e => entryTouchesKey(e, 'ym', [k]) || entryTouchesKey(e, 'sm', [k]));
   }
   if (m.startsWith('confus:')) {
-    const keys = confusKeys(CONFUS[Number(m.slice(7)) || 0]);
-    return [...bi(BUILTIN.chars), ...bi(BUILTIN.words2)].filter(e => entryTouchesKey(e, keys));
+    const { role, keys } = confusKeys(CONFUS[Number(m.slice(7)) || 0]);
+    return [...bi(BUILTIN.chars), ...bi(BUILTIN.words2)].filter(e => entryTouchesKey(e, role, keys));
   }
   switch (m) {
     case 'chars': return bi(BUILTIN.chars);
@@ -233,7 +241,7 @@ function next() {
   const settings = store.getSettings();
   let hint = '';
   if (hintLevel === 'full') {
-    if (settings.showPy && it.py) hint += it.py.replace(/\s+/g, ' ');
+    if (settings.showPy && it.py) hint += esc(it.py.replace(/\s+/g, ' '));
     if (settings.showCode) hint += (hint ? ' · ' : '') + `<b>${esc(it.code)}</b>`;
   }
   $('hint').innerHTML = hint;
@@ -264,9 +272,11 @@ function adapt(acc) {
   const order = ['none', 'keys', 'full'];
   if (acc >= 95 && s.adaptHigh >= 2 && hintLevel !== 'none') {
     setHintLevel(order[Math.max(0, order.indexOf(hintLevel) - 1)]);
+    s.adaptHigh = 0;
     toast('准确率持续 ≥95%，提示自动降一档');
   } else if (acc < 70 && hintLevel !== 'full') {
     setHintLevel(order[Math.min(2, order.indexOf(hintLevel) + 1)]);
+    s.adaptHigh = 0;
     toast('准确率偏低，提示自动升一档');
   }
   store.setSettings(s);
@@ -415,7 +425,10 @@ function onInput() {
       }
     }
     if (pos >= expected.length) {
-      if (mode === 'finaldrill' && drillKey) store.srsTouch(drillKey, !wrongInWord);
+      if (mode === 'finaldrill' && drillSeq.length) {
+        for (const pl of plans) if (pl && drillSeq.includes(pl.ymKey)) store.srsTouch(pl.ymKey, !wrongInWord);
+      }
+      if (mode === 'sprint') { combo++; $('sCombo').textContent = String(combo); }
       if (settings.sound) sound.hit();
       idx++;
       if (mode !== 'sprint') $('sDone').textContent = `${idx}/${queue.length}`;
@@ -435,6 +448,7 @@ function onInput() {
     }
   } else {
     wrongKeys++;
+    combo = 0; $('sCombo').textContent = '0';
     wrongInWord = true;
     trackWrongWord();
     inbox.value = typed.slice(0, -1);
@@ -489,10 +503,12 @@ function challengeState() {
   const ch = store.getChallenge();
   if (!ch) return null;
   const sessions = store.getSessions();
+  const days = store.getDays();
   return CHALLENGE.map((item, i) => {
     const match = /** @type {(m: string) => boolean} */ (item[2]);
     const day = new Date(ch.start + i * 86400000).toDateString();
-    return { tag: item[0], label: item[1], done: sessions.some(s => new Date(s.ts).toDateString() === day && match(s.mode)) };
+    const done = i === 0 ? !!days[day]?.course : sessions.some(s => new Date(s.ts).toDateString() === day && match(s.mode));
+    return { tag: item[0], label: item[1], done };
   });
 }
 
@@ -528,6 +544,7 @@ function renderCourse() {
 }
 
 function renderStage0(body) {
+  store.markCourseSeen();
   body.innerHTML = `<h3>${scheme.name}键位全景</h3>
     <p>每个键有两个角色：大字是声母位，小字是该键承载的韵母。
     翘舌声母换位见朱砂描边键（${scheme.name}：${Object.entries(scheme.SM_NAME).map(([k, v]) => `${v}→${k.toUpperCase()}`).join('、')}）。
@@ -567,6 +584,7 @@ function renderStage1(body) {
 function startFinalDrill(k, keySeq) {
   mode = 'finaldrill';
   drillKey = k;
+  drillSeq = keySeq || [k];
   const seq = keySeq || [k];
   const hit = BUILTIN.chars
     .map(({ w, p }) => ({ word: w, py: p, code: '', weight: 1 }))
@@ -623,7 +641,7 @@ function renderPacks() {
   for (const p of PACKS) {
     const d = document.createElement('div');
     d.className = 'lib';
-    const subbed = subs.includes(p.file);
+    const subbed = subs.includes(p.file) && store.getLibs().some(l => l.name === `集市·${p.name}`);
     d.innerHTML = `<div><b>${p.name}</b><br><span>词表集市 · 同源静态包</span></div>`;
     const btn = document.createElement('button');
     btn.className = 'btn ' + (subbed ? 'ghost' : 'primary');
@@ -649,8 +667,9 @@ $('addCustom').onclick = () => {
   if (!text.trim()) return;
   const r = parsePlain(text);
   if (!r.entries.length) { toast('未解析出有效词条（格式：词 拼音）'); return; }
+  const old = store.getLibs().find(l => l.name === '自定义词单');
+  const { entries } = mergeEntries([...(old ? [old.entries] : []), r.entries]);
   store.removeLib('自定义词单');
-  const { entries } = mergeEntries([r.entries]);
   const res = store.addLib('自定义词单', entries);
   toast(res.ok ? `自定义词单入库 ${entries.length} 条` : '存储已满');
   $('customText').value = '';
@@ -734,13 +753,26 @@ function renderStreak() {
   return streak;
 }
 
+function maxStreakFromDays(days) {
+  let best = 0;
+  for (const k of Object.keys(days)) {
+    const prev = new Date(new Date(k).getTime() - 86400000).toDateString();
+    if (days[prev]) continue;
+    let cur = 1, n = new Date(k);
+    while (days[new Date(n.getTime() + 86400000).toDateString()]) { cur++; n = new Date(n.getTime() + 86400000); }
+    best = Math.max(best, cur);
+  }
+  return best;
+}
+
 function computeBadges(sessions, streak) {
   const keys = sessions.reduce((a, s) => a + s.total, 0);
-  const words = store.getMistakes().length + store.getPool().length;
+  const bestStreak = Math.max(streak, maxStreakFromDays(store.getDays()));
   return [
     ['首练', sessions.length >= 1, '完成第一次练习'],
+    ['百词', keys >= 200, '累计 100 词'],
     ['千键', keys >= 1000, '累计 1000 键'],
-    ['七日连练', streak >= 7, '连续 7 天'],
+    ['七日连练', bestStreak >= 7, '连续 7 天'],
     ['冲刺 80', sessions.some(s => s.mode === 'sprint' && s.kpm >= 80), '冲刺 80 键/分'],
     ['满分一轮', sessions.some(s => s.acc === 100 && s.total >= 20), '整轮零失误'],
     ['藏书', store.getLibs().length >= 1, '导入或订阅词库'],
@@ -765,12 +797,12 @@ function renderStats() {
   $('badges').innerHTML = computeBadges(sessions, streak).map(([name, got, desc]) =>
     `<div class="badge${got ? ' got' : ''}" title="${desc}"><b>${name}</b><span>${got ? '已达成' : '未达成'}</span></div>`).join('');
 
-  // 键位日历（近 12 周）
+  // 键位日历（近一年）
   const days = store.getDays();
   const cal = $('calendar');
   cal.innerHTML = '';
   const now = new Date();
-  for (let i = 83; i >= 0; i--) {
+  for (let i = 364; i >= 0; i--) {
     const d = new Date(now.getTime() - i * 86400000);
     const rec = days[d.toDateString()];
     const lv = !rec ? 0 : rec.keys < 50 ? 1 : rec.keys < 150 ? 2 : 3;
@@ -845,15 +877,16 @@ function renderMistakes() {
 $('trainMistakes').onclick = () => gotoPractice('mistakes');
 $('clearMistakes').onclick = () => { store.clearMistakes(); renderMistakes(); };
 $('exportRime').onclick = () => {
+  const fly = SCHEMES.flypy;
   const mk = store.getMistakes();
   const custom = store.getLibs().find(l => l.name === '自定义词单');
-  const lines = ['# Rime 自定义短语（鹤练导出 · 小鹤码）', '# 放入 rime 配置目录并在 schema 挂载 custom_phrase'];
+  const lines = ['# Rime 自定义短语（鹤练导出 · 小鹤码）', '# 格式：词<TAB>码<TAB>权重；放入 rime 配置并挂载 custom_phrase'];
   const seen = new Set();
   for (const e of [...mk, ...(custom?.entries || [])]) {
-    const code = entryCode(e);
+    const code = fly.entryCode(e);
     if (!code || seen.has(e.word)) continue;
     seen.add(e.word);
-    lines.push(`${code}\t2\t${e.word}`);
+    lines.push(`${e.word}\t${code}\t1`);
   }
   const blob = new Blob([lines.join('\n') + '\n'], { type: 'text/plain' });
   const a = document.createElement('a');
