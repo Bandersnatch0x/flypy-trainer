@@ -598,3 +598,38 @@ h2 { font-size: 1.12rem; font-weight: 600; margin: 28px 0 12px; color: var(--bon
   .kb { display: none; }
   .kbmap { display: block; }
 }
+
+/* ---- V2 组件 ---- */
+.toast {
+  position: fixed; left: 50%; bottom: 32px; transform: translateX(-50%) translateY(20px);
+  background: var(--raised); color: var(--bone); border: 1px solid var(--line);
+  padding: 10px 22px; border-radius: 12px; font-size: 0.9rem; opacity: 0;
+  pointer-events: none; transition: opacity 0.2s var(--ease), transform 0.2s var(--ease); z-index: 40;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.badges { display: flex; gap: 10px; flex-wrap: wrap; }
+.badge {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+  padding: 10px 16px; text-align: center; opacity: 0.45;
+}
+.badge.got { opacity: 1; border-color: var(--bamboo); }
+.badge b { display: block; font-size: 0.95rem; }
+.badge span { color: var(--ash); font-size: 0.75rem; }
+.calendar { display: grid; grid-auto-flow: column; grid-template-rows: repeat(7, 12px); gap: 3px; overflow-x: auto; padding: 4px 0; }
+.calendar i { width: 12px; height: 12px; border-radius: 3px; background: var(--surface); }
+.calendar i.cal1 { background: rgba(127, 169, 140, 0.35); }
+.calendar i.cal2 { background: rgba(127, 169, 140, 0.65); }
+.calendar i.cal3 { background: var(--bamboo); }
+.custombox {
+  width: 100%; background: var(--surface); color: var(--bone); border: 1px solid var(--line);
+  border-radius: 12px; padding: 12px; font-family: var(--mono); font-size: 0.9rem; margin: 8px 0 12px;
+}
+.sel {
+  background: var(--raised); color: var(--bone); border: 1px solid var(--line);
+  border-radius: 10px; padding: 8px 12px; font-family: var(--sans); margin-left: 10px;
+}
+.due-dot { color: var(--cinnabar); font-size: 0.7rem; vertical-align: top; }
+.stages li.challenge { border-left-color: var(--bamboo); }
+@media (max-width: 768px) {
+  .kb { display: flex; } /* 移动端显示可点键盘 */
+}

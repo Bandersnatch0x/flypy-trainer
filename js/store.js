@@ -19,7 +19,6 @@ function save(key, data) {
   catch { return false; }
 }
 
-// 键统计缓冲：避免每键全量写
 let keyBuf = {};
 function flushKeys() {
   if (!Object.keys(keyBuf).length) return;
@@ -33,11 +32,14 @@ function flushKeys() {
   keyBuf = {};
 }
 
+// Leitner 三盒：盒 1 每天 / 盒 2 每 3 天 / 盒 3 每 7 天（ADR-0006）
+const SRS_INTERVAL = { 1: 1, 2: 3, 3: 7 };
+const DAY = 86400000;
+
 export const store = {
-  getSettings: () => load('settings', { hintLevel: 'full', showPy: true, showCode: true, hlKeys: true, keyImpact: true }),
+  getSettings: () => load('settings', { hintLevel: 'full', showPy: true, showCode: true, hlKeys: true, sound: false, scheme: 'flypy' }),
   setSettings: (s) => save('settings', s),
 
-  // 按库存储，支持逐库删除；练习池 = 全部库合并
   getLibs: () => load('libs', []),
   getPool() {
     const libs = load('libs', []);
@@ -48,15 +50,10 @@ export const store = {
   addLib(name, entries) {
     const libs = load('libs', []);
     libs.push({ name, addedAt: Date.now(), entries });
-    if (!save('libs', libs)) {
-      libs.pop();
-      return { ok: false, kept: this.getPool().length };
-    }
+    if (!save('libs', libs)) { libs.pop(); return { ok: false, kept: this.getPool().length }; }
     return { ok: true, kept: this.getPool().length };
   },
-  removeLib(name) {
-    save('libs', load('libs', []).filter(l => l.name !== name));
-  },
+  removeLib(name) { save('libs', load('libs', []).filter(l => l.name !== name)); },
   clearPool() { save('libs', []); },
 
   getSessions: () => load('sessions', []),
@@ -64,7 +61,15 @@ export const store = {
     const s = load('sessions', []);
     s.push(rec);
     save('sessions', s.slice(-SESSION_CAP));
+    const d = new Date(rec.ts).toDateString();
+    const days = load('days', {});
+    const cur = days[d] || { keys: 0, errs: 0, sessions: 0 };
+    cur.keys += rec.total; cur.sessions += 1;
+    cur.errs += Math.round(rec.total * (1 - rec.acc / 100));
+    days[d] = cur;
+    save('days', days);
   },
+  getDays: () => load('days', {}),
 
   addKey(k, ok) {
     const c = keyBuf[k] || [0, 0];
@@ -90,6 +95,29 @@ export const store = {
 
   getCourse: () => load('course', { stage: 0 }),
   setCourse: (c) => save('course', c),
+
+  // ---- SRS（韵母键间隔重复）----
+  getSRS: () => load('srs', {}),
+  srsTouch(key, ok) {
+    const m = load('srs', {});
+    const cur = m[key] || { box: 1, due: 0 };
+    cur.box = ok ? Math.min(3, cur.box + 1) : 1;
+    cur.due = Date.now() + SRS_INTERVAL[cur.box] * DAY;
+    m[key] = cur;
+    save('srs', m);
+  },
+  srsDueKeys() {
+    const m = load('srs', {});
+    const now = Date.now();
+    return Object.entries(m).filter(([, v]) => v.due <= now).map(([k]) => k);
+  },
+
+  // ---- 七日挑战 ----
+  getChallenge: () => load('challenge', null),
+  startChallenge: () => save('challenge', { start: Date.now() }),
+
+  getSubs: () => load('subs', []),
+  setSubs: (s) => save('subs', s),
 
   resetAll() {
     flushKeys();

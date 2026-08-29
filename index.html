@@ -5,6 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>鹤练 · 小鹤双拼练习</title>
 <meta name="description" content="小鹤双拼在线打字练习：导入你的 Rime 词库个性化练习，或从零基础课程开始。纯浏览器本地运行。">
+<meta property="og:title" content="鹤练 · 小鹤双拼练习">
+<meta property="og:description" content="你的词库，只在你的浏览器里。本地词库导入 / 五阶课程 / 错键热力图 / 离线可用。">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://flypy-trainer.vercel.app/">
+<meta property="og:image" content="https://flypy-trainer.vercel.app/og-image.svg">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#101014">
+<link rel="manifest" href="manifest.webmanifest">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&family=JetBrains+Mono:wght@400;600&family=Noto+Serif+SC:wght@600&display=swap" rel="stylesheet">
@@ -32,6 +40,11 @@
     <button data-mode="words2">二字词</button>
     <button data-mode="words34">多字词</button>
     <button data-mode="mixed">混合</button>
+    <button data-mode="sentences">整句</button>
+    <button data-mode="sprint">60s 冲刺</button>
+    <button data-mode="confus:0">in/ing</button>
+    <button data-mode="confus:1">an/ang</button>
+    <button data-mode="confus:3">zh/z</button>
     <button data-mode="personal">我的词库</button>
     <button data-mode="mistakes">错词重练</button>
   </div>
@@ -98,17 +111,30 @@
     <p>拖拽文件到这里，或 <label class="linklike">点击选择<input id="filein" type="file" multiple hidden></label></p>
   </div>
   <div id="report" class="report" aria-live="polite"></div>
+  <h2>词表集市</h2>
+  <p class="sub">同源静态词包，一键订阅入库。</p>
+  <div id="packs" class="liblist"></div>
+  <h2>自定义词单</h2>
+  <p class="sub">每行「词 拼音」，例如：双拼 shuang pin</p>
+  <textarea id="customText" class="custombox" rows="4" placeholder="双拼 shuang pin&#10;鹤练 he lian"></textarea>
+  <button id="addCustom" class="btn primary">加入词库</button>
+  <h2>已入库</h2>
   <div id="liblist" class="liblist"></div>
 </section>
 
 <section id="view-stats" class="view hidden">
   <h1>统计</h1>
   <div class="totals" id="totals"></div>
+  <h2>徽章</h2>
+  <div id="badges" class="badges"></div>
+  <h2>练习日历（近 12 周）</h2>
+  <div id="calendar" class="calendar"></div>
   <h2>错键热力图</h2>
-  <p class="sub">颜色越红，该键错误率越高。</p>
+  <p class="sub">颜色越红，该键错误率越高。点击任意键发起弱键特训。</p>
   <div id="kbheat" class="kb heat"></div>
   <h2>准确率趋势（最近会话）</h2>
   <div id="spark" class="spark"></div>
+  <div class="rowbtns"><button id="shareBtn" class="btn ghost">生成成绩分享卡</button></div>
   <h2>会话记录</h2>
   <div id="sesslist" class="sesslist"></div>
 </section>
@@ -117,6 +143,7 @@
   <h1>错词本</h1>
   <div class="rowbtns">
     <button id="trainMistakes" class="btn primary">用错词开练</button>
+    <button id="exportRime" class="btn ghost">导出 Rime 短语</button>
     <button id="clearMistakes" class="btn ghost">清空</button>
   </div>
   <div id="mklist" class="mklist"></div>
@@ -131,6 +158,18 @@
       <label class="chk"><input type="radio" name="hintSet" value="keys"> 仅按键（键盘①②高亮）</label>
       <label class="chk"><input type="radio" name="hintSet" value="none"> 无提示（裸练）</label>
     </div>
+  </div>
+  <div class="setgroup">
+    <h2>方案与音效</h2>
+    <label class="chk">输入法方案
+      <select id="setScheme" class="sel">
+        <option value="flypy">小鹤双拼</option>
+        <option value="mspy">微软双拼</option>
+        <option value="sogou">搜狗双拼</option>
+        <option value="abc">智能ABC</option>
+      </select>
+    </label>
+    <label class="chk"><input type="checkbox" id="setSound"> 按键音效（默认关）</label>
   </div>
   <div class="setgroup">
     <h2>显示与体感</h2>
@@ -148,6 +187,7 @@
 </main>
 
 <canvas id="impactCanvas" class="impact-canvas" aria-hidden="true"></canvas>
+<div id="toast" class="toast" role="status"></div>
 
 <footer class="foot">鹤练 · 数据全部保存在你的浏览器本地 — 无账号、无上传、无遥测 · <a href="https://github.com/Bandersnatch0x/flypy-trainer/issues" target="_blank" rel="noopener">提 issue</a></footer>
 

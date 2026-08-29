@@ -1,0 +1,21 @@
+{
+  "name": "常用成语",
+  "desc": "四字成语多字词练习，训练长词节奏",
+  "entries": [
+    { "w": "一鸣惊人", "p": "yi ming jing ren" }, { "w": "画龙点睛", "p": "hua long dian jing" },
+    { "w": "守株待兔", "p": "shou zhu dai tu" }, { "w": "亡羊补牢", "p": "wang yang bu lao" },
+    { "w": "掩耳盗铃", "p": "yan er dao ling" }, { "w": "刻舟求剑", "p": "ke zhou qiu jian" },
+    { "w": "拔苗助长", "p": "ba miao zhu zhang" }, { "w": "井底之蛙", "p": "jing di zhi wa" },
+    { "w": "狐假虎威", "p": "hu jia hu wei" }, { "w": "画蛇添足", "p": "hua she tian zu" },
+    { "w": "对牛弹琴", "p": "dui niu tan qin" }, { "w": "滥竽充数", "p": "lan yu chong shu" },
+    { "w": "破釜沉舟", "p": "po fu chen zhou" }, { "w": "卧薪尝胆", "p": "wo xin chang dan" },
+    { "w": "三顾茅庐", "p": "san gu mao lu" }, { "w": "草船借箭", "p": "cao chuan jie jian" },
+    { "w": "完璧归赵", "p": "wan bi gui zhao" }, { "w": "负荆请罪", "p": "fu jing qing zui" },
+    { "w": "纸上谈兵", "p": "zhi shang tan bing" }, { "w": "闻鸡起舞", "p": "wen ji qi wu" },
+    { "w": "悬梁刺股", "p": "xuan liang ci gu" }, { "w": "凿壁偷光", "p": "zao bi tou guang" },
+    { "w": "囊萤映雪", "p": "nang ying ying xue" }, { "w": "韦编三绝", "p": "wei bian san jue" },
+    { "w": "熟能生巧", "p": "shu neng sheng qiao" }, { "w": "循序渐进", "p": "xun xu jian jin" },
+    { "w": "持之以恒", "p": "chi zhi yi heng" }, { "w": "锲而不舍", "p": "qie er bu she" },
+    { "w": "事半功倍", "p": "shi ban gong bei" }, { "w": "举一反三", "p": "ju yi fan san" }
+  ]
+}

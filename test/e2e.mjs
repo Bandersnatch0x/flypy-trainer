@@ -44,7 +44,7 @@ check('仅按键档①高亮存在', await page.locator('#kb .key.smhi').count()
 
 // 5. 课程页
 await page.goto(BASE + '/#/course', { waitUntil: 'networkidle' });
-check('五阶课程渲染', await page.locator('#stages li').count().then(n => n === 5));
+check('五阶课程+挑战卡渲染', await page.locator('#stages li').count().then(n => n === 6));
 check('键位全景图渲染', await page.locator('#kbmap .key').count().then(n => n === 26));
 
 // 6. 导入：上传小型 userdb 快照
@@ -70,7 +70,7 @@ check('错词本有条目', await page.locator('#mklist .mk').count().then(n => 
 
 // 9. 统计页渲染
 await page.goto(BASE + '/#/stats', { waitUntil: 'networkidle' });
-check('统计三卡渲染', await page.locator('#totals div').count().then(n => n === 3));
+check('统计四卡渲染', await page.locator('#totals div').count().then(n => n === 4));
 check('热力键盘渲染', await page.locator('#kbheat .key').count().then(n => n === 26));
 
 // 10. 隐私：无任何非本地网络请求（字体除外）
@@ -79,6 +79,28 @@ page.on('request', (r) => reqs.push(r.url()));
 await page.goto(BASE + '/#/practice', { waitUntil: 'networkidle' });
 const foreign = reqs.filter(u => !u.startsWith(BASE) && !u.includes('fonts.g'));
 check('无外部数据请求', foreign.length === 0);
+
+// 11. V2：方案切换 / 集市 / 徽章 / 日历 / 冲刺入口
+await page.goto(BASE + '/#/settings', { waitUntil: 'networkidle' });
+await page.selectOption('#setScheme', 'mspy');
+await page.waitForTimeout(200);
+await page.goto(BASE + '/#/practice', { waitUntil: 'networkidle' });
+check('微软方案键盘含分号键', await page.locator('#kb .key[data-key=";"]').count().then(n => n === 1));
+check('冲刺模式按钮存在', await page.locator('#modes button[data-mode="sprint"]').count().then(n => n === 1));
+check('易混对抗按钮存在', await page.locator('#modes button[data-mode="confus:0"]').count().then(n => n === 1));
+await page.goto(BASE + '/#/import', { waitUntil: 'networkidle' });
+check('词表集市两包', await page.locator('#packs .lib').count().then(n => n === 2));
+check('自定义词单输入框', await page.locator('#customText').count().then(n => n === 1));
+await page.goto(BASE + '/#/stats', { waitUntil: 'networkidle' });
+check('徽章墙六枚', await page.locator('#badges .badge').count().then(n => n === 6));
+check('日历 84 格', await page.locator('#calendar i').count().then(n => n === 84));
+check('分享卡按钮', await page.locator('#shareBtn').count().then(n => n === 1));
+await page.goto(BASE + '/#/mistakes', { waitUntil: 'networkidle' });
+check('Rime 导出按钮', await page.locator('#exportRime').count().then(n => n === 1));
+await page.goto(BASE + '/#/course', { waitUntil: 'networkidle' });
+check('七日挑战卡', await page.locator('#stages li.challenge').count().then(n => n === 1));
+await page.goto(BASE + '/#/settings', { waitUntil: 'networkidle' });
+await page.selectOption('#setScheme', 'flypy');
 
 await browser.close();
 console.log(`\n${pass} passed, ${fail} failed`);

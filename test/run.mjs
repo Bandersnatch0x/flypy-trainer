@@ -80,5 +80,28 @@ eq('sample cap', weightedSample(pool, 999).length, 50);
 const heavy = weightedSample([{ word: 'a', code: 'aa', weight: 1e9 }, { word: 'b', code: 'bb', weight: 1 }], 1, () => 0.5);
 eq('sample weighted', heavy[0].word, 'a');
 
+
+// ---- 7. 多方案映射（译自 rime-ice algebra）----
+import * as SC from '../js/schemes.js';
+const m = SC.getScheme('mspy'), sg = SC.getScheme('sogou'), ab = SC.getScheme('abc');
+eq('mspy shuang', m.toFly('shuang'), 'ud');
+eq('mspy pin', m.toFly('pin'), 'pn');
+eq('mspy zhong', m.toFly('zhong'), 'vs');
+eq('mspy ying(分号键)', m.toFly('ying'), 'y;');
+eq('mspy an 零声母', m.toFly('an'), 'aj');
+eq('mspy ai 零声母', m.toFly('ai'), 'al');
+eq('mspy ju→jv', m.toFly('ju'), 'jy');
+eq('mspy chuang', m.toFly('chuang'), 'id');
+eq('sogou shuang', sg.toFly('shuang'), 'ud');
+eq('sogou ming(分号键)', sg.toFly('ming'), 'm;');
+eq('abc shuang', ab.toFly('shuang'), 'vt');
+eq('abc pin', ab.toFly('pin'), 'pc');
+eq('abc zhong', ab.toFly('zhong'), 'as');
+eq('abc an 零声母 o 前缀', ab.toFly('an'), 'oj');
+eq('abc ai 零声母', ab.toFly('ai'), 'ol');
+eq('abc ming', ab.toFly('ming'), 'my');
+eq('abc chuang', ab.toFly('chuang'), 'et');
+eq('scheme list 4 项', SC.SCHEME_LIST.length, 4);
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
