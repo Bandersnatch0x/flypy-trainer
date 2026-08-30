@@ -11,6 +11,9 @@
 //                         构建期简繁桥后以简体为键（SPEC-0004 §2，issue #10）：
 //                         映射小表 tools/jyutping/s2t.json（自写），一对多择主流字形留审核清单
 //                         （buildJyutping 产出 tools/jyutping/bridge-review.md）
+//   - stroke.v1.json      rime/rime-stroke stroke.dict.yaml（LGPL-3.0；主码表=「數位發展部, CNS11643」），
+//                         截 GB2312 6,763 常用字，每字取首次出现（主码表底本；同字重出为附码表/
+//                         超集扩充的异写笔顺/笔形归属，不入包）（SPEC-0004 §3，issue #11）
 //
 // 决策记录：
 //   - 上游原始字典不入部署目录、不入版本控制：缓存于 tools/.cache/（.gitignore），
@@ -366,6 +369,25 @@ function writeBridgeReview({ mapped, identity, mappedWordChars, poolUniq, missin
   fs.writeFileSync(path.join(ROOT, 'tools', 'jyutping', 'bridge-review.md'), lines.join('\n'));
 }
 
+// ---------- 5) stroke.v1.json：GB2312 6,763 常用字（SPEC-0004 §3.1，issue #11）----
+// 官方码表本体即笔顺数据（全单字表，上游 max_phrase_length:1 明示无词码）。
+// 每字取首次出现：文件按字频排序，主码表（CNS11643 底本）在前；其后同字重出条目
+// 为附码表/超集扩充的异写笔顺与笔形归属（钩归折/归竖、艹三笔/四笔一类），只记数不入包。
+function buildStroke(rows, gb) {
+  const table = {};
+  const variantSet = new Set(); // 同字重出且码不同 = 上游异写笔顺/笔形归属（只记数不入包）
+  for (const cols of rows) {
+    const [word, codeRaw] = cols;
+    if (!word || !codeRaw) continue;
+    if ([...word].length !== 1 || !gb.has(word)) continue;
+    const code = codeRaw.trim().toLowerCase();
+    if (!/^[hsnpz]{1,84}$/.test(code)) continue;
+    if (!(word in table)) table[word] = code;
+    else if (table[word] !== code) variantSet.add(word);
+  }
+  return { table, variantChars: variantSet.size };
+}
+
 // ---------- 主流程 ----------
 const sha256 = (buf) => crypto.createHash('sha256').update(buf).digest('hex');
 const write = (name, obj) => {
@@ -472,4 +494,33 @@ write('jyutping-tones.v1.json', {
   ...jp.table,
 });
 
-console.log('[done] 四份 pack 生成完毕');
+// ---- stroke ----
+const strokeBuf = await fetchUpstream('rime/rime-stroke', 'stroke.dict.yaml', 'stroke.dict.yaml');
+const stroke = buildStroke(parseRimeDict(strokeBuf.toString('utf8')), gb);
+if (Object.keys(stroke.table).length !== 6763) throw new Error(`stroke 截表异常：${Object.keys(stroke.table).length} ≠ 6763`);
+// 简体常用字实测全命中（T1-五笔画 §2.2 盘点事实，构建期断言固化）
+for (const [ch, code] of Object.entries({ 飞: 'zpn', 龙: 'hppzn', 语: 'nzhszhszh', 说: 'nznpszhpz', 鹤: 'nzpsnhhhshpznzh', 练: 'zzhhzzpn' })) {
+  if (stroke.table[ch] !== code) throw new Error(`stroke 抽检不符：${ch}=${stroke.table[ch]}（预期 ${code}）`);
+}
+const strokeLens = Object.values(stroke.table).map(c => c.length);
+const strokeDist = {};
+for (const l of strokeLens) strokeDist[l] = (strokeDist[l] || 0) + 1;
+console.log(`[info] stroke 覆盖 ${Object.keys(stroke.table).length} 字（码长 ${Math.min(...strokeLens)}–${Math.max(...strokeLens)}，峰 ${Object.entries(strokeDist).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([l, n]) => `${l}笔×${n}`).join(' ')}；上游同字异写重出 ${stroke.variantChars} 字，取首次出现不入包）`);
+write('stroke.v1.json', {
+  _meta: {
+    id: 'stroke', v: 1, name: '五笔画笔顺码表 · GB2312 常用字',
+    source: 'rime/rime-stroke — stroke.dict.yaml（官方码表：主码表源自 CNS11643 中文标准交换码全字库，Kunki Chou 整理；附码表源自北大中文论坛；超集扩充至 Ext J 来自宋天）',
+    upstream: 'https://github.com/rime/rime-stroke',
+    upstreamSha256: sha256(strokeBuf),
+    license: LGPL, licenseUrl: LGPL_URL,
+    attribution: '數位發展部, CNS11643（主码表政府资料开放授权，与 CC-BY 4.0 兼容；条件=注明出处）',
+    notes: '截 GB2312 6,763 常用字；每字取首次出现（主码表底本；同字重出为附码表/超集扩充的异写笔顺与笔形归属，共 ' + stroke.variantChars + ' 字，不入包）；五键 hspnz=横竖撇捺折，点归捺、提归横、带转折归折；上游 max_phrase_length:1 明示无词码',
+    baseText: '笔顺底本为 CNS11643（台标），与大陆笔顺规范在少数字（方/火/必 一类）存在微差；教学从底本，出处页声明',
+    entries: 6763,
+    variantChars: stroke.variantChars,
+    codeLen: { min: Math.min(...strokeLens), max: Math.max(...strokeLens) },
+  },
+  ...stroke.table,
+});
+
+console.log('[done] 五份 pack 生成完毕');
