@@ -600,6 +600,49 @@ check('预下载落 SW 缓存', await p3.evaluate(async () => {
 await p3.close();
 await ctx3.close();
 
+// 21. v4 #12：移动端键盘适配（T3-D1–D7）—— 375px 视口弹性键宽不溢出 / 键高 ≥44 /
+//     调号角标 6·ˊ 一类练习与预览同享（单一键位数据源）
+const ctxM = await browser.newContext({ viewport: { width: 375, height: 667 } });
+const pm = await ctxM.newPage();
+const kbFit = () => pm.evaluate(() => {
+  const vw = window.innerWidth;
+  const rows = [...document.querySelectorAll('#kb .kbrow')];
+  const keys = [...document.querySelectorAll('#kb .key')];
+  return {
+    noScroll: document.documentElement.scrollWidth <= vw,
+    rowsIn: rows.length > 0 && rows.every(r => {
+      const b = r.getBoundingClientRect();
+      return b.right <= vw + 0.5 && b.left >= -0.5;
+    }),
+    minH: Math.min(...keys.map(k => k.getBoundingClientRect().height)),
+  };
+});
+await pm.goto(BASE + '/#/practice', { waitUntil: 'networkidle' });
+let fit = await kbFit();
+check('375px 26 键形态行不溢出视口（禁分行/横滚）', fit.noScroll && fit.rowsIn);
+check('375px 键高 ≥44（触控基准按高执行）', fit.minH >= 44);
+// 注音大千 41 键形态：数字行 11 键窄屏同样不溢出
+await switchScheme(pm, 'zhuyin', 1200);
+await pm.goto(BASE + '/#/practice', { waitUntil: 'networkidle' });
+check('注音 42 键元在窄屏渲染', await pm.locator('#kb .key').count().then(n => n === 42));
+fit = await kbFit();
+check('375px 注音 41 键形态行不溢出视口', fit.noScroll && fit.rowsIn);
+check('375px 注音键高 ≥44', fit.minH >= 44);
+check('注音调键 6/3/4/7 角标补调号（练习键盘）',
+  await pm.locator('#kb .key[data-key="6"] .ym').innerText().then(t => t === '6·ˊ')
+  && await pm.locator('#kb .key[data-key="3"] .ym').innerText().then(t => t === '3·ˇ')
+  && await pm.locator('#kb .key[data-key="4"] .ym').innerText().then(t => t === '4·ˋ')
+  && await pm.locator('#kb .key[data-key="7"] .ym').innerText().then(t => t === '7·˙'));
+check('注音 - 键保持 ㄦ、空格 ˉ 宽键不动',
+  await pm.locator('#kb .key[data-key="-"] .sm').innerText().then(t => t === 'ㄦ')
+  && await pm.locator('#kb .key[data-key=" "] .sm').innerText().then(t => t === 'ˉ'));
+// D6：方案库迷你预览与练习键盘共用 scheme.layout，调号角标同享
+await pm.goto(BASE + '/#/schemes', { waitUntil: 'networkidle' });
+check('预览迷你键盘同享调号角标（单一键位数据源）',
+  await pm.locator('.scard[data-scheme="zhuyin"] .kbmini .key[data-key="6"] .ym').innerText().then(t => t === '6·ˊ'));
+await pm.close();
+await ctxM.close();
+
 await browser.close();
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

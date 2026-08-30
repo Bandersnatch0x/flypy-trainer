@@ -639,8 +639,30 @@ h2 { font-size: 1.12rem; font-weight: 600; margin: 28px 0 12px; color: var(--bon
   .fmt.big { grid-row: auto; }
   .totals { grid-template-columns: 1fr; gap: 10px; }
   .resgrid { grid-template-columns: 1fr 1fr; gap: 16px; padding: 20px; }
-  .kb { display: none; }
-  .kbmap { display: block; }
+  /* v4 #12（T3-D1/D5/D7）：移动端保留可点按键盘 —— 768px 单断点，历史互斥的
+     「.kb{display:none} / 后置 .kb{display:flex}」两处合并为单一规则，行为不变。
+     所有键盘形态（练习 #kb / 课程 #kbmap / 热力 #kbheat，26 键与 41 键同权）：
+     弹性键宽 + 行宽 100% + 行隙 4px，禁分行禁横滚；键高 ≥44（触控基准按「高」执行，
+     键宽下限为键盘矩阵成文例外，SPEC-0004 §4-D1）。kbmini 预览不受影响。 */
+  .kb, .kbmap { display: flex; flex-direction: column; align-items: center; width: 100%; max-width: none; gap: 4px; padding: 8px; }
+  .kb:not(.kbmini) .kbrow, .kbmap .kbrow { width: 100%; gap: 2px; flex-wrap: nowrap; }
+  .kb:not(.kbmini) .key, .kbmap .key { width: auto; flex: 1 1 0; min-width: 0; height: 46px; }
+  /* 注音大千窄屏下调：.kb.wide 键宽下限 30px → ~24px 容 11 键（vw 上限兜极窄屏不溢出）；
+     字号下限：注音主显 ≥13px、角标 ≥8px（T3-D7） */
+  .kb.wide .key { min-width: min(24px, 6.5vw); }
+  .kb.wide .key .sm { font-size: 13px; }
+  .kb.wide .key .ym { font-size: 8px; }
+  /* 形码两字 tag 键宽内省略号截断（复用现有 ellipsis，T3-D3） */
+  .kb:not(.kbmini) .key .ym, .kbmap .key .ym { max-width: 100%; }
+}
+
+/* v4 #12（T3-D3）：角标三下限之键宽下限 —— 键宽 <28px 隐角标保主字母。
+   弹性等宽下键宽随视口单调：≤345px 时最窄行（10 键行）键宽 <28px（320px 屏 ≈25px）；
+   字根详情经键图 title 与字根总表兜底，.special 描边键不藏。注音数字行角标为
+   数字/调号（非中文角标），不受可读性下限约束，.wide 不隐。 */
+@media (max-width: 345px) {
+  .kb:not(.kbmini):not(.wide) .key .ym,
+  .kbmap:not(.wide) .key .ym { display: none; }
 }
 
 /* ---- V2 组件 ---- */
@@ -674,6 +696,3 @@ h2 { font-size: 1.12rem; font-weight: 600; margin: 28px 0 12px; color: var(--bon
 }
 .due-dot { color: var(--cinnabar); font-size: 0.7rem; vertical-align: top; }
 .stages li.challenge { border-left-color: var(--bamboo); }
-@media (max-width: 768px) {
-  .kb { display: flex; } /* 移动端显示可点键盘 */
-}

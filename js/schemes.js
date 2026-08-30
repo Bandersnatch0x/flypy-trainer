@@ -5,7 +5,7 @@
 // - makeScheme 是音码（双拼族）实现工厂；全拼另走恒等派生；形码走 makeShapeScheme（字表查询，issue #5）。
 // 键位表译自 iDvel/rime-ice 与 rime-double-pinyin 官方 schema algebra 段（ADR-0005），自写表。
 import { normalizeSyllable, splitSyllable, splitPinyin, YM as FLYPY_YM, SM_KEYS as FLYPY_SM, SM_NAME as FLYPY_SMN } from './flypy.js';
-import { ZY_ROWS, ZY_EXTRA_KEYS, ZM_OF_KEY, TONE_MARKS, toZhuyin, keysOfToned, planOfToned } from './zhuyin.js';
+import { ZY_ROWS, ZY_EXTRA_KEYS, ZM_OF_KEY, TONE_KEYS, TONE_MARKS, TONE_NAME, toZhuyin, keysOfToned, planOfToned } from './zhuyin.js';
 import { keysOfToned as jpKeysOfToned, planOfToned as jpPlanOfToned, JP_SM_KEYS, JP_YM_KEYS } from './jyutping.js';
 import { CJ_LETTERS, quickOf } from './cangjie.js';
 import { WB_ROOTS } from './wubi.js';
@@ -155,7 +155,8 @@ function makeQuanpin() {
 // ---- 注音：py 派生（声明带调数据依赖，SPEC-0003 §2）----
 // 带调拼音来自 zhuyin-tones pack（activate() 懒加载，表落 scheme.table，按词查带调音节）；
 // 码 = 拼音→注音派生键序（符号键 + 声调键收尾，第一声键 = 空格 ' '）。大千 41 键布局，
-// 键帽主显注音符号、角标物理键（T4-Q5）。
+// 键帽主显注音符号、角标物理键（T4-Q5）；6/3/4/7 四个数字调键角标补调号、title 注调键
+// 角色（T3-D2）——键位不动，- 承载 ㄦ 非调键，空格 ˉ 宽键维持底部全宽。
 function makeZhuyin() {
   const tonedSylsOf = (entry) => {
     const toned = entry && entry.word && scheme.table ? scheme.table[entry.word] : null;
@@ -200,8 +201,15 @@ function makeZhuyin() {
     }
     return parts.join(' ');
   };
+  // 大千声调键反查（ˊ=6 ˇ=3 ˋ=4 ˙=7；ˉ=空格另行）：键位数据单一来源，派生自 TONE_KEYS（T3-D2/D6）
+  const TONE_KEY_OF = Object.fromEntries(Object.entries(TONE_KEYS)
+    .filter(([, k]) => k !== ' ').map(([t, k]) => [k, +t]));
   const keyLabel = (ch) => {
     if (ch === ' ') return { main: 'ˉ', sub: '空格', title: '声调一（ˉ）· 空格键' };
+    const tone = TONE_KEY_OF[ch];
+    if (tone) {
+      return { main: ch, sub: `${ch}·${TONE_MARKS[tone]}`, title: `声调键 ${ch} · ${TONE_NAME[tone]}` };
+    }
     const zm = ZM_OF_KEY[ch];
     return zm
       ? { main: zm, sub: ch, title: `${zm} · 键 ${ch.toUpperCase()}` }
