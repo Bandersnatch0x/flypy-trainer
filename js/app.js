@@ -257,6 +257,7 @@ function showEmptyBoard(filteredOut) {
   $('word').textContent = '∅';
   $('hint').textContent = '';
   $('guide').textContent = packMissing ? `${DATA_PACKS[scheme.packId].name}未就绪 —— 网络就绪后可重试加载`
+    : mode === 'personal' && filteredOut && scheme.id === 'zhuyin' ? '导入词暂无声调数据 —— 注音按词级声调表出题，导入词暂未覆盖；可切回拼音方案练导入词'
     : mode === 'personal' ? '还没有导入词库 —— 去「导入」页添加你的词库，或换别的模式'
     : mode.startsWith('weak:') ? '该键还没有练习数据 —— 先练几轮'
     : mode === 'mistakes' ? '错词本是空的 —— 先去练一轮'
@@ -894,6 +895,7 @@ function renderStageMistakes(body, st) {
   const n = store.getMistakes(scheme.id).length;
   body.innerHTML = `<h3>${st.name}</h3>
     <p>${st.body.replace('{n}', `<b>${n}</b>`)}</p>
+    ${n ? '' : '<p class="sub">词库全方案通用，立即可练</p>'}
     <button class="btn primary" id="goMk">${n ? '开始强化' : '错词本是空的'}</button>`;
   $('goMk').onclick = () => { if (n) gotoPractice('mistakes'); };
 }
@@ -1141,7 +1143,8 @@ function renderMistakes() {
   if (!mk.length) {
     box.innerHTML = `<div class="empty">
       <svg width="56" height="56" viewBox="0 0 56 56"><path d="M14 40 Q20 18 28 22 Q36 26 34 34 Q44 28 44 40" stroke="#8B8B93" stroke-width="2" fill="none"/><circle cx="30" cy="18" r="3" fill="#D96C4F"/></svg>
-      还没有错过，继续</div>`;
+      还没有错过，继续
+      <p class="sub">词库全方案通用，立即可练</p></div>`;
     return;
   }
   for (const m of mk.slice(0, 60)) {
