@@ -285,6 +285,50 @@ await page.waitForTimeout(150);
 check('注音阶 1 符号操练按钮 42 个（21+3+13+5）', await page.locator('#finalkeys button').count().then(n => n === 42));
 check('注音阶 1 声调键收尾分组在', await page.locator('#finalkeys').innerText().then(t => t.includes('声调键')));
 check('注音阶 1 分组标题齐（声符/介符/韵符/声调键）', await page.locator('#finalkeys .drillgroup').count().then(n => n === 4));
+// 16b. v4 #10：粤拼方案 —— 带调包懒加载 / 26 键 / 六调键收尾 / 阳调双敲单一连击单元（验收 4 交互面）
+await switchScheme(page, 'jyutping', 900); // 激活状态流：正在准备粤拼带调数据 → 就绪
+await page.goto(BASE + '/#/practice', { waitUntil: 'networkidle' });
+check('粤拼键盘 26 键元（标准 26 键零布局）', await page.locator('#kb .key').count().then(n => n === 26));
+check('粤拼码文本显带调粤拼串', await page.locator('#hint b').innerText().then(t => /^[a-z]+[1-6]( [a-z]+[1-6])*$/.test(t)));
+const jpCode = await page.evaluate(async () => {
+  const m = await import('/js/schemes.js');
+  return m.getScheme('jyutping').codeOf({ word: document.querySelector('#word').textContent });
+});
+check('粤拼码以六调键收尾（v/x/q）', typeof jpCode === 'string' && /[vqx]$/.test(jpCode));
+for (const ch of jpCode) await page.locator('#inbox').press(ch);
+await page.waitForTimeout(300);
+check('粤拼带调输入整词推进', await page.locator('#sDone').innerText().then(t => t.startsWith('1/')));
+const jpWrong = jpCode[0] === 'w' ? 'e' : 'w';
+await page.locator('#inbox').press(jpWrong);
+check('粤拼错键反馈含应是', await page.locator('#fb').innerText().then(t => t.includes('应是')));
+check('粤拼阳调双敲 = 单一连击单元（plan span=2 + note）', await page.evaluate(async () => {
+  const m = await import('/js/schemes.js');
+  const s = m.getScheme('jyutping');
+  const c = s.codeOf({ word: '是' });
+  const plan = s.planOf(c, { word: '是' });
+  const last = plan.keys.at(-1);
+  return c === 'siqq' && plan.keys.length === 3 && last.span === 2 && last.note.includes('同键连按两下');
+}));
+await page.goto(BASE + '/#/course', { waitUntil: 'networkidle' });
+check('粤拼五阶+挑战卡渲染', await page.locator('#stages li').count().then(n => n === 6));
+check('粤拼阶 0 键盘图 26 键元', await page.locator('#kbmap .key').count().then(n => n === 26));
+check('粤拼阶 0 文案讲透六调辨义', await page.locator('#view-course').innerText().then(t =>
+  t.includes('六调辨义') || t.includes('声调辨义')));
+await page.locator('#stages li:not(.challenge)').nth(1).click();
+await page.waitForTimeout(150);
+check('粤拼阶 1 操练按钮 31 个（声母 17+韵母 11+调键 3）', await page.locator('#finalkeys button').count().then(n => n === 31));
+check('粤拼阶 1 调键组单列双敲提示', await page.locator('#finalkeys').innerText().then(t => t.includes('阳调同键双敲')));
+// 阳调双敲呈现一致性探针：调键操练轮的引导话术带调名注记、键盘高亮落在当前单元
+await page.evaluate(() => { // 探针前置：固定全提示+高亮（防前序会话自适应降档干扰）
+  const s = JSON.parse(localStorage.getItem('flypy.v1.settings'));
+  s.data.hintLevel = 'full'; s.data.hlKeys = true;
+  localStorage.setItem('flypy.v1.settings', JSON.stringify(s));
+});
+await page.locator('#finalkeys button').filter({ hasText: /^Q/ }).last().click();
+await page.waitForTimeout(400);
+check('粤拼调键操练引导含调名注记（阴/阳）', await page.locator('#guide').innerText().then(t => /阴|阳/.test(t)));
+check('粤拼调键操练键盘高亮当前单元', await page.locator('#kb .key.smhi').count().then(n => n === 1));
+await switchScheme(page, 'flypy', 300);
 // 17. v3 #5：仓颉深教样板 + 速成 —— 字表查询 / 取题仅单字 / 字根认知五阶 / 首尾派生
 await switchScheme(page, 'cangjie', 900); // 激活状态流：正在准备仓颉单字码表（~269KB）→ 就绪
 await page.goto(BASE + '/#/practice', { waitUntil: 'networkidle' });
@@ -397,14 +441,14 @@ await switchScheme(page, 'flypy', 200);
 // 19a. 方案库页：10 卡、三层分组、旗舰大卡、五层信息、五笔灰调、速成互注
 await page.goto(BASE + '/#/schemes', { waitUntil: 'networkidle' });
 check('方案库页头文案', await page.locator('.schemelib-head').innerText().then(t => t.includes('方案库') && t.includes('音码打声、形码打形')));
-check('方案库恰 10 卡', await page.locator('.scard').count().then(n => n === 10));
+check('方案库恰 11 卡', await page.locator('.scard').count().then(n => n === 11));
 check('旗舰大卡独享顶层（徽章+使用中）', await page.locator('.scard.flagship').count().then(n => n === 1)
   && await page.locator('.scard.flagship').innerText().then(t => t.includes('旗舰 · 默认') && t.includes('使用中')));
 check('音码组科普行', await page.locator('.schemegroup[data-group="phonetic"] h2').innerText().then(t => t.includes('音码 · 码即读音')));
 check('形码组科普行', await page.locator('.schemegroup[data-group="shape"] h2').innerText().then(t => t.includes('形码 · 码即字形')));
-check('音码组 6 卡 / 形码组 3 卡', JSON.stringify([
+check('音码组 7 卡 / 形码组 3 卡', JSON.stringify([
   await page.locator('.schemegroup[data-group="phonetic"] .scard').count(),
-  await page.locator('.schemegroup[data-group="shape"] .scard').count()]) === JSON.stringify([6, 3]));
+  await page.locator('.schemegroup[data-group="shape"] .scard').count()]) === JSON.stringify([7, 3]));
 check('速成卡紧邻仓颉卡', await page.locator('.schemegroup[data-group="shape"] .scard').evaluateAll(
   els => els.map(e => e.dataset.scheme)).then(ids => ids.indexOf('quick') - ids.indexOf('cangjie') === 1));
 check('速成卡互注文案', await page.locator('.scard[data-scheme="quick"] .scard-feat').innerText().then(t => t.includes('仓颉首尾二码')));
@@ -425,8 +469,8 @@ const chipH = await page.locator('#schemeChip').boundingBox().then(b => b.height
 check('芯片触控目标 ≥44px', chipH >= 44);
 await page.click('#schemeChip');
 await page.waitForTimeout(150);
-check('弹层两组 10 项 + 进方案库入口', await page.locator('#schemePop .popgroup').count().then(n => n === 2)
-  && await page.locator('#schemePop button[data-scheme]').count().then(n => n === 10)
+check('弹层两组 11 项 + 进方案库入口', await page.locator('#schemePop .popgroup').count().then(n => n === 2)
+  && await page.locator('#schemePop button[data-scheme]').count().then(n => n === 11)
   && await page.locator('#schemePop .poplib').count().then(n => n === 1));
 check('当前项朱砂勾', await page.locator('#schemePop button[data-scheme="flypy"]').evaluate(el => el.classList.contains('cur') && el.querySelector('.tick').textContent === '✓'));
 await page.keyboard.press('Escape');

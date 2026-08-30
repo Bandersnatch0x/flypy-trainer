@@ -23,13 +23,13 @@ function eq(name, got, want) {
 }
 
 const fly = SCHEMES.flypy, mspy = SCHEMES.mspy, sogou = SCHEMES.sogou, abc = SCHEMES.abc,
-  zrm = SCHEMES.ziranma, qp = SCHEMES.quanpin, zy = SCHEMES.zhuyin,
+  zrm = SCHEMES.ziranma, qp = SCHEMES.quanpin, zy = SCHEMES.zhuyin, jp = SCHEMES.jyutping,
   cj = SCHEMES.cangjie, qk = SCHEMES.quick, wb = SCHEMES.wubi86;
 const code = (scheme, py) => scheme.codeOf({ word: '测', py });
 
 // ---- 1. 方案接口完整性（§3.1）----
 eq('默认方案仍为小鹤', DEFAULT_SCHEME, 'flypy');
-eq('注册表 10 方案（+五笔 86 降级形态，#6）', Object.values(SCHEMES).length, 10);
+eq('注册表 11 方案（+粤拼，#10）', Object.values(SCHEMES).length, 11);
 for (const s of Object.values(SCHEMES)) {
   eq(`${s.id} 接口七件齐`, ['id', 'name', 'paradigm', 'codeOf', 'planOf', 'layout', 'activate'].every(k => s[k] !== undefined), true);
   eq(`${s.id} paradigm 随范式`, s.paradigm, ['cangjie', 'quick', 'wubi86'].includes(s.id) ? 'shape' : 'phonetic');
@@ -38,6 +38,8 @@ for (const s of Object.values(SCHEMES)) {
   eq(`${s.id} specialOf 函数`, typeof s.layout.specialOf, 'function');
   if (s.id === 'zhuyin') {
     eq('zhuyin activate 挂 zhuyin-tones 包（带调数据依赖，§2）', s.packId, 'zhuyin');
+  } else if (s.id === 'jyutping') {
+    eq('jyutping activate 挂 jyutping-tones 包（带调数据依赖，#10 §2.4）', s.packId, 'jyutping');
   } else if (s.id === 'cangjie' || s.id === 'quick') {
     eq(`${s.id} activate 挂 cangjie5 包（字表查询，§2）`, s.packId, 'cangjie5');
   } else if (s.id === 'wubi86') {
@@ -300,20 +302,28 @@ const { BUILTIN: POOL } = await import('../js/data.js');
 const packs = await import('../js/packs.js');
 const { PACKS, loadPack, packState, bindPack, lookupChars, prefetchPacks, __resetForTest } = packs;
 
-// -- 工件：三份版本化紧凑 {字: 码}，内嵌出处与许可；速成/全拼/自然码无包 --
+// -- 工件：四份版本化紧凑 {字: 码}，内嵌出处与许可；速成/全拼/自然码无包 --
 const packDir = new URL('../data/packs/', import.meta.url);
 const readPack = (f) => JSON.parse(fs.readFileSync(new URL(f, packDir), 'utf8'));
 const wubiPack = readPack('wubi86.v1.json');
 const cangPack = readPack('cangjie5.v1.json');
 const zhuyPack = readPack('zhuyin-tones.v1.json');
+const jyutPack = readPack('jyutping-tones.v1.json');
 const entriesOf = (p) => Object.keys(p).filter(k => !k.startsWith('_'));
-eq('packs 目录恰有三份版本化 JSON', fs.readdirSync(packDir).filter(f => f.endsWith('.json')).sort(),
-  ['cangjie5.v1.json', 'wubi86.v1.json', 'zhuyin-tones.v1.json']);
+eq('packs 目录恰有四份版本化 JSON', fs.readdirSync(packDir).filter(f => f.endsWith('.json')).sort(),
+  ['cangjie5.v1.json', 'jyutping-tones.v1.json', 'wubi86.v1.json', 'zhuyin-tones.v1.json']);
 for (const [name, p] of [['wubi86', wubiPack], ['cangjie5', cangPack], ['zhuyin-tones', zhuyPack]]) {
   eq(`${name} _meta 出处`, typeof p._meta.source === 'string' && p._meta.source.length > 0, true);
   eq(`${name} _meta 许可`, p._meta.license, 'LGPL-3.0');
   eq(`${name} _meta 上游指纹`, /^[0-9a-f]{64}$/.test(p._meta.upstreamSha256), true);
 }
+// jyutping-tones：CC-BY-4.0 署名义务（#10 验收 1）
+eq('jyutping-tones _meta 出处（带调字表）', jyutPack._meta.source.includes('jyut6ping3.chars.dict.yaml'), true);
+eq('jyutping-tones _meta 许可 CC-BY-4.0', jyutPack._meta.license, 'CC-BY-4.0');
+eq('jyutping-tones _meta 上游指纹（字/词两表）', /^[0-9a-f]{64}$/.test(jyutPack._meta.upstreamSha256) && /^[0-9a-f]{64}$/.test(jyutPack._meta.upstreamWordsSha256), true);
+eq('jyutping-tones _meta CanCLID 署名', jyutPack._meta.attribution.includes('CanCLID'), true);
+eq('jyutping-tones raw ≤500KB（验收 1 预算）', fs.statSync(new URL('jyutping-tones.v1.json', packDir)).size <= 500 * 1024, true);
+eq('jyutping-tones 条数与 _meta 一致', entriesOf(jyutPack).length, jyutPack._meta.entries);
 eq('wubi86 = GB2312 6,763 常用字', entriesOf(wubiPack).length, 6763);
 eq('wubi86 键皆单字', entriesOf(wubiPack).every(w => [...w].length === 1), true);
 eq('wubi86 码域 a–y ≤4 键', entriesOf(wubiPack).every(w => /^[a-y]{1,4}$/.test(wubiPack[w])), true);
@@ -334,6 +344,33 @@ eq('zhuyin 值 = 逐字带调音节（1–5 调）', uniqItems.every(e => {
 }), true);
 eq('zhuyin 已知条目', [zhuyPack['北京'], zhuyPack['吗'], zhuyPack['我们']], ['bei3 jing1', 'ma5', 'wo3 men5']);
 eq('zhuyin 宽松选音清单在案', Array.isArray(zhuyPack._meta.fallbacks), true);
+// jyutping-tones：简繁桥后以简体为键、内置池字词全覆盖（#10 验收 2/6）
+eq('jyutping-tones 以简体为键覆盖内置池全部字词', uniqItems.every(e => typeof jyutPack[e.w] === 'string'), true);
+eq('jyutping 值 = 逐字带调音节（1–6 调）', uniqItems.every(e => {
+  const syls = (jyutPack[e.w] || '').split(' ');
+  return syls.length === [...e.w].length && syls.every(s => /^[a-z]+[1-6]$/.test(s));
+}), true);
+eq('jyutping 已知条目（桥 + 择读 + 词表变调）', [jyutPack['你'], jyutPack['是'], jyutPack['中国'], jyutPack['什么'], jyutPack['广州']],
+  ['nei5', 'si6', 'zung1 gwok3', 'sam6 mo1', 'gwong2 zau1']);
+eq('jyutping 单字阶题量 ≥400（桥 ∩ 内置池，验收 2 下限）', POOL.chars.filter(({ w }) => typeof jyutPack[w] === 'string').length >= 400, true);
+eq('jyutping 池字六调全覆盖（验收 2）', (() => {
+  const tones = new Set(POOL.chars.map(({ w }) => jyutPack[w]).filter(Boolean).map(t => +t.slice(-1)));
+  return [...tones].sort();
+})(), [1, 2, 3, 4, 5, 6]);
+// 简繁桥工件：自写映射小表 + 一对多/多音字审核清单（验收 6）
+const jpS2t = JSON.parse(fs.readFileSync(new URL('../tools/jyutping/s2t.json', import.meta.url), 'utf8'));
+const jpS2tEntries = Object.keys(jpS2t).filter(k => !k.startsWith('_'));
+eq('简繁桥映射小表自写且逐条可审（池字集口径）', jpS2tEntries.length >= 200 && Object.values(jpS2t).every(v => typeof v === 'string' || v == null || typeof v === 'object'), true);
+eq('简繁桥映射值皆在带调字表可查（桥可执行）', (() => {
+  const zhuyLike = Object.keys(jyutPack).filter(k => !k.startsWith('_'));
+  return jpS2tEntries.filter(s => POOL.chars.some(({ w }) => w === s)).every(s => zhuyLike.includes(s));
+})(), true);
+eq('jyutping _meta 桥统计在案', jyutPack._meta.bridge.mapped >= 200 && Array.isArray(jyutPack._meta.bridge.missing), true);
+const jpReview = fs.readFileSync(new URL('../tools/jyutping/bridge-review.md', import.meta.url), 'utf8');
+eq('审核清单：一对多择主流字形留单（发→發）', jpReview.includes('发 → 發'), true);
+eq('审核清单：撞车字折转留单（广→廣/惊→驚）', jpReview.includes('广 → 廣') && jpReview.includes('惊 → 驚'), true);
+eq('审核清单：多音字择读留单', jpReview.includes('中 → zung1') && jpReview.includes('只 → zi2'), true);
+eq('审核清单：词级逐字拼接清单在案', jpReview.includes('词级逐字拼接清单'), true);
 
 // -- 装载器：内存缓存 / 并发去重 / 失败重试 / 未就绪可重试 / 不阻塞其它方案 --
 let fetchLog = [];
@@ -537,6 +574,108 @@ for (const pair of zyCourse.confus) {
   eq(`zhuyin 易混对 ${pair.label} 两侧可取题`, pair.keys.every(k => touch(k) > 0), true);
 }
 zy.table = null;
+
+// ---- v4 #10：粤拼方案（SPEC-0004 §2，验收 1–7）----
+const jpm = await import('../js/jyutping.js');
+const { keysOfToned: jpKeysOf, planOfToned: jpPlanOf, planUnitAt: jpUnitAt, JP_TONE_KEYS: JP_TK } = jpm;
+
+// -- 六调键位：阴调单键 / 阳调双键（官方 algebra 先例）--
+eq('六调键 1→v 2→x 3→q / 4→vv 5→xx 6→qq', [JP_TK[1], JP_TK[2], JP_TK[3], JP_TK[4], JP_TK[5], JP_TK[6]],
+  ['v', 'x', 'q', 'vv', 'xx', 'qq']);
+
+// -- 派生：字母串即键序 + 尾缀 1–6 → v/x/q（×2）；入声随韵尾（≥12 用例，验收 3/30）--
+const JP_CASES = [
+  ['si1', 'siv'], ['si2', 'six'], ['si3', 'siq'], ['si4', 'sivv'], ['si5', 'sixx'], ['si6', 'siqq'],
+  ['sik1', 'sikv'], ['sek3', 'sekq'], ['sik6', 'sikqq'], // 入声随韵尾（色/錫/食，官方例）
+  ['nei5', 'neixx'], ['hou2', 'houx'], ['gwok3', 'gwokq'], ['mung4', 'mungvv'], ['faat3', 'faatq'],
+];
+for (const [toned, want] of JP_CASES) eq(`粤拼派生 ${toned}`, jpKeysOf(toned), want);
+eq('粤拼派生：无调不可派生', jpKeysOf('nei'), null);
+eq('粤拼派生：调 7 非法', jpKeysOf('nei7'), null);
+eq('粤拼派生：非法字母串', jpKeysOf('zz9'), null);
+eq('粤拼拼写不含 q/v/x（调键零冲突的事实基础）', [...jpm.JP_SM_KEYS, ...jpm.JP_YM_KEYS].every(k => !'qvx'.includes(k)), true);
+
+// -- plan：阳调双键 = 单一连击单元（验收 4 的 plan 面）--
+eq('粤拼 plan 阴调收尾单键单元', jpPlanOf('sik1').at(-1), { key: 'v', label: 'V', note: '阴平 · 声调 1', role: 'tone' });
+eq('粤拼 plan 阳调收尾单一单元（span=2 + note 同键连按两下）', jpPlanOf('si6').at(-1),
+  { key: 'q', label: 'QQ', note: '阳去 · 同键连按两下', role: 'tone', span: 2 });
+eq('粤拼 plan 字母键 role=ym', jpPlanOf('nei5').slice(0, 2).map(k => k.role), ['ym', 'ym']);
+eq('粤拼 plan 不可派生 → null', jpPlanOf('zz9'), null);
+// plan 单元寻址（span 感知）：双敲两键位皆指向同一单元
+const pSikqq = jpPlanOf('sik6');
+eq('planUnitAt：双敲首键位命中调单元', jpUnitAt(pSikqq, 3), { unit: pSikqq.at(-1), index: 3, start: 3 });
+eq('planUnitAt：双敲次键位仍命中同一单元', jpUnitAt(pSikqq, 4).unit, pSikqq.at(-1));
+eq('planUnitAt：越界返回 null', jpUnitAt(pSikqq, 5), null);
+eq('planUnitAt：无 span 单元行为不变', jpUnitAt(jpPlanOf('si1'), 2).unit.key, 'v');
+
+// -- 方案层：带调数据依赖 + 码/提示/布局（验收 3）--
+eq('jyutping 表未就绪 → 不出题（懒加载接缝）', jp.codeOf({ word: '你' }), null);
+jp.table = Object.fromEntries(Object.entries(jyutPack).filter(([k]) => !k.startsWith('_')));
+eq('jyutping.codeOf 单字阴调', jp.codeOf({ word: '中' }), 'zungv');
+eq('jyutping.codeOf 单字阳调（双敲）', [jp.codeOf({ word: '时' }), jp.codeOf({ word: '我' }), jp.codeOf({ word: '是' })],
+  ['sivv', 'ngoxx', 'siqq']);
+eq('jyutping.codeOf 词组 = 逐音节键序连打', jp.codeOf({ word: '中国' }), 'zungvgwokq');
+eq('jyutping.codeOf 缺字 → null（取题过滤）', jp.codeOf({ word: '龘' }), null);
+eq('jyutping.displayOf = 带调粤拼串', [jp.displayOf({ word: '中国' }), jp.displayOf({ word: '你' })], ['zung1 gwok3', 'nei5']);
+const pJp = jp.planOf('zungvgwokq', { word: '中国' });
+eq('jyutping plan 扁平键序（词组 10 键位）', pJp.keys.map(k => k.key), ['z', 'u', 'n', 'g', 'v', 'g', 'w', 'o', 'k', 'q']);
+eq('jyutping plan roles（字母=ym、调键收尾）', [...new Set(pJp.keys.map(k => k.role))], ['ym', 'tone']);
+eq('jyutping plan groups（len 按击键数，双敲计 2）', pJp.groups, [{ syl: 'zung1', start: 0, len: 5 }, { syl: 'gwok3', start: 5, len: 5 }]);
+const pJpY = jp.planOf('siqq', { word: '是' });
+eq('jyutping plan 阳调双敲呈现为单一单元（勿拆两单元，验收 4）', [pJpY.keys.length, pJpY.keys.at(-1).note], [3, '阳去 · 同键连按两下']);
+jp.table = null;
+eq('jyutping 表撤载 → 不出题', jp.codeOf({ word: '你' }), null);
+
+// -- 布局：标准 26 键零布局，调键键帽标注（验收 3/7）--
+jp.table = Object.fromEntries(Object.entries(jyutPack).filter(([k]) => !k.startsWith('_')));
+eq('jyutping 26 键无附键', jp.layout.ROWS.join('').length + jp.layout.extraKeys.length, 26);
+eq('jyutping 调键键帽角标（单敲/双敲同键）', [jp.layout.keyLabel('v').sub, jp.layout.keyLabel('x').sub, jp.layout.keyLabel('q').sub],
+  ['调1/4', '调2/5', '调3/6']);
+eq('jyutping 调键 title 讲透双敲', jp.layout.keyLabel('q').title.includes('同键连按两下') && jp.layout.keyLabel('v').title.includes('阳平调 4'), true);
+eq('jyutping 字母键角标一层（无小字，移动端角标纪律预留）', [...'abcdefghijklmnoprstuw'].every(k => jp.layout.keyLabel(k).sub === ''), true);
+eq('jyutping specialOf 全空（无描边键）', [...'abcdefghijklmnopqrstuvwxyz'].every(k => jp.layout.specialOf(k) === ''), true);
+
+// -- 课程五阶（§2.5，验收 5）--
+const jpCourse = courseOf('jyutping');
+eq('jyutping 恰五阶且形态齐', [jpCourse.stages.length, jpCourse.stages.map(s => s.kind)],
+  [5, ['keys', 'drill', 'practice', 'practice', 'mistakes']]);
+eq('jyutping 阶 0 = 26 键键位图认知', jpCourse.stages[0].kind === 'keys' && jpCourse.stages[0].view === 'map' && jpCourse.stages[0].sub.includes('26 键'), true);
+eq('jyutping 阶 0 六调辨义讲透（阴阳映射 + 入声 + 选 q/v/x 之因）', (() => {
+  const b = jpCourse.stages[0].body;
+  return [b.includes('调 1 阴平按 v'), b.includes('阳调同键连按两下'), b.includes('入声音节以 -p/-t/-k 收尾'),
+    b.includes('不含这三个字母'), b.includes('sikv=色') && b.includes('sikqq=食')];
+})(), [true, true, true, true, true]);
+const jpDrill = jpCourse.stages[1];
+eq('jyutping 阶 1 = 符号操练（SRS 单元=字母键+调键，§7 推断 3）', jpDrill.kind === 'drill' && jpDrill.unit === 'symbol', true);
+eq('jyutping 阶 1 分组：声母 17 → 韵母 11 → 六调键 3 收尾', jpDrill.groups.map(g => g.keys.length), [17, 11, 3]);
+eq('jyutping 阶 1 调键组单列双敲提示', jpDrill.groups[2].label.includes('阳调同键双敲') && jpDrill.groups[2].keys, ['v', 'x', 'q']);
+eq('jyutping SRS 单元 = 22 拼写字母键 + 3 调键（声韵组共享 6 键，并集 25；唯 r 不入粤拼键位）', (() => {
+  const ks = jpDrill.groups.flatMap(g => g.keys);
+  const uniq = new Set(ks);
+  return uniq.size === 25 && ks.length === 31 && !uniq.has('r');
+})(), true);
+eq('jyutping 阶 2 = 单字带调', jpCourse.stages[2].pools, ['chars']);
+eq('jyutping 阶 3 = 单字深化（词表不截取裁定直陈，码长升序）', [jpCourse.stages[3].pools, jpCourse.stages[3].seq, jpCourse.stages[3].body.includes('首版不截取')],
+  [['chars'], 'len', true]);
+eq('jyutping 阶 4 = 错词本', jpCourse.stages[4].kind, 'mistakes');
+eq('jyutping stageModes：阶 3 = chars@len（与阶 2 模式名可区分）', [stageModes(jpCourse.stages[2]), stageModes(jpCourse.stages[3])], [['chars'], ['chars@len']]);
+// confus：调对（物理键直给），两侧皆可取题（真实带调表 + 内置池）
+eq('jyutping 易混对皆调对（键直给）', jpCourse.confus.every(p => p.role === 'tone' && Array.isArray(p.keys)), true);
+const jpBase = [...POOL.chars, ...POOL.words2].map(({ w, p }) => ({ word: w, py: p }));
+for (const pair of jpCourse.confus) {
+  const touch = (k) => jpBase.filter(e => {
+    const c = jp.codeOf(e);
+    return c && jp.planOf(c, e).keys.some(pk => pk.key === k && pk.role === 'tone');
+  }).length;
+  eq(`jyutping 易混对 ${pair.label} 可取题`, pair.keys.every(k => touch(k) > 0), true);
+}
+// 七日挑战谓词可判定（验收 5）
+eq('jyutping 挑战七条齐', jpCourse.challenge.length, 7);
+eq('jyutping 挑战 D2=调键操练', challengeMatch(jpCourse.challenge[1].match, 'finaldrill', jpCourse), true);
+eq('jyutping 挑战 D3=单字带调', challengeMatch(jpCourse.challenge[2].match, 'chars', jpCourse) && !challengeMatch(jpCourse.challenge[2].match, 'chars@len', jpCourse), true);
+eq('jyutping 挑战 D4=单字深化（@len 模式可区分）', challengeMatch(jpCourse.challenge[3].match, 'chars@len', jpCourse) && !challengeMatch(jpCourse.challenge[3].match, 'chars', jpCourse), true);
+eq('jyutping 挑战 D5=声调对抗（confus 前缀）', challengeMatch(jpCourse.challenge[4].match, 'confus:2', jpCourse), true);
+jp.table = null;
 
 // -- syllablesOf 余例 --
 eq('syllablesOf 连写串切分', syllablesOf('zhongguo'), ['zhong', 'guo']);
@@ -742,27 +881,32 @@ eq('命名边界：方案名即通称', [wb.id, wb.name, Object.values(SCHEMES).
 // ---- v3 #7：方案库 UI 数据模型（SPEC-0003 §5.1/§5.2/§5.4/§5.5，验收条目 17/20 的纯逻辑面）----
 const sui = await import('../js/schemes-ui.js');
 
-// -- 三层分组：旗舰小鹤顶层 + 音码组（6）+ 形码组（3），合计 10 卡无重复（条目 17）--
+// -- 三层分组：旗舰小鹤顶层 + 音码组（7）+ 形码组（3），合计 11 卡无重复（条目 17 / #10 追加末位）--
 eq('旗舰 = 小鹤', sui.FLAGSHIP_ID, 'flypy');
 const groupIds = sui.GROUPS.flatMap(g => g.ids);
-eq('方案库恰 10 卡（旗舰 1 + 组内 9，无重复）', new Set([sui.FLAGSHIP_ID, ...groupIds]).size === 10 && groupIds.length === 9, true);
-eq('10 卡覆盖注册表全部方案', Object.keys(SCHEMES).every(id => id === sui.FLAGSHIP_ID || groupIds.includes(id)), true);
-eq('音码组次序：自然码/微软/搜狗/智能ABC → 全拼 → 注音', sui.GROUPS[0].ids, ['ziranma', 'mspy', 'sogou', 'abc', 'quanpin', 'zhuyin']);
+eq('方案库恰 11 卡（旗舰 1 + 组内 10，无重复）', new Set([sui.FLAGSHIP_ID, ...groupIds]).size === 11 && groupIds.length === 10, true);
+eq('11 卡覆盖注册表全部方案', Object.keys(SCHEMES).every(id => id === sui.FLAGSHIP_ID || groupIds.includes(id)), true);
+eq('音码组次序：自然码/微软/搜狗/智能ABC → 全拼 → 注音 → 粤拼（追加末位，§7 推断 2）',
+  sui.GROUPS[0].ids, ['ziranma', 'mspy', 'sogou', 'abc', 'quanpin', 'zhuyin', 'jyutping']);
 eq('形码组次序：仓颉 → 速成 → 五笔 86（速成紧邻仓颉）', sui.GROUPS[1].ids, ['cangjie', 'quick', 'wubi86']);
 eq('分组科普行（§5.1 文案）', [sui.GROUPS[0].blurb, sui.GROUPS[1].blurb],
-  ['音码 · 码即读音（全拼、五种双拼、注音）', '形码 · 码即字形（仓颉、速成、五笔）']);
+  ['音码 · 码即读音（全拼、五种双拼、注音、粤拼）', '形码 · 码即字形（仓颉、速成、五笔）']);
 eq('速成卡与仓颉卡相邻（互注前提，T5-D5）', sui.GROUPS[1].ids.indexOf('quick') - sui.GROUPS[1].ids.indexOf('cangjie'), 1);
+// 命名边界（#10 验收 28）：粤拼产品文案（课程/卡片/分组）零上游仓名与机构名，署名只在 _meta 与 licenses
+const jpProductCopy = JSON.stringify([courseOf('jyutping'), sui.CARD_FEATURES.jyutping, sui.GROUPS, sui.schemeHelpOf(SCHEMES.jyutping)]);
+eq('命名边界：粤拼产品文案零 CanCLID/rime-cantonese', /CanCLID|rime-cantonese|CanCLID/.test(jpProductCopy), false);
 
 // -- 卡片元数据：十卡皆有一句话特点；关键文案按规格（条目 17）--
 eq('十卡皆备一句话特点', Object.keys(SCHEMES).every(id => typeof sui.CARD_FEATURES[id] === 'string' && sui.CARD_FEATURES[id].length > 0), true);
 eq('自然码特点 = 与微软差 3 处（T4）', sui.CARD_FEATURES.ziranma, '与微软双拼仅差 3 处');
 eq('注音特点 = 41 键大千布局 · 声调成字（T4）', sui.CARD_FEATURES.zhuyin, '41 键大千布局 · 声调成字');
+eq('粤拼卡文案自拟（一句话特点，§8 缺口 1）', sui.CARD_FEATURES.jyutping, '六声调辨义 · 阴调单键、阳调同键双敲');
 eq('速成卡互注文案（§5.1）', sui.CARD_FEATURES.quick, '速成 = 仓颉首尾二码，节奏更快');
 eq('仓颉卡回指速成（互注双向，§5.1 / P4）', sui.CARD_FEATURES.cangjie.includes('速成'), true);
 
 // -- 状态行：课程形态标签 + 五笔灰调降级标签（条目 17 / T5-D6）--
-eq('课程形态：五阶课程（双拼/仓颉/速成/注音）', ['flypy', 'mspy', 'zhuyin', 'cangjie', 'quick'].map(sui.courseFormOf),
-  ['五阶课程', '五阶课程', '五阶课程', '五阶课程', '五阶课程']);
+eq('课程形态：五阶课程（双拼/仓颉/速成/注音/粤拼）', ['flypy', 'mspy', 'zhuyin', 'jyutping', 'cangjie', 'quick'].map(sui.courseFormOf),
+  ['五阶课程', '五阶课程', '五阶课程', '五阶课程', '五阶课程', '五阶课程']);
 eq('课程形态：全拼 = 提速课程', sui.courseFormOf('quanpin'), '提速课程');
 eq('课程形态：五笔 = 字根总表 + 自由练习', sui.courseFormOf('wubi86'), '字根总表 + 自由练习');
 eq('五笔灰调标签直陈（暂无五阶课程，不遮掩）', sui.cardTagOf('wubi86'), '字根总表 + 自由练习 · 暂无五阶课程');
@@ -771,7 +915,7 @@ eq('余方案无灰调标签', Object.keys(SCHEMES).filter(id => id !== 'wubi86'
 // -- 变化面：形码隐藏二字词/多字词/整句（条目 20 纯逻辑面，§5.4）--
 eq('形码隐藏三模式（仓颉/速成/五笔）', ['cangjie', 'quick', 'wubi86'].every(id =>
   JSON.stringify(sui.hiddenModesFor(SCHEMES[id])) === JSON.stringify(['words2', 'words34', 'sentences'])), true);
-eq('音码不隐藏（双拼/全拼/注音）', ['flypy', 'quanpin', 'zhuyin'].every(id => sui.hiddenModesFor(SCHEMES[id]).length === 0), true);
+eq('音码不隐藏（双拼/全拼/注音/粤拼）', ['flypy', 'quanpin', 'zhuyin', 'jyutping'].every(id => sui.hiddenModesFor(SCHEMES[id]).length === 0), true);
 
 // -- 切回态卡片摘要（条目 21 三态 1：课程第 N 阶 · 错词 X 条；五笔无课程阶不显课程段）--
 store.addMistake('flypy', { word: '双拼', py: 'shuang pin', errPos: 0 });
@@ -786,6 +930,7 @@ eq('小鹤科普：翘舌换位自方案表派生（zh→V/ch→I/sh→U）', su
 eq('微软科普：o 引导零声母话术', sui.schemeHelpOf(SCHEMES.mspy).body.includes('O 引导'), true);
 eq('全拼科普 = 码即拼音', sui.schemeHelpOf(SCHEMES.quanpin).summary, '什么是全拼？');
 eq('注音标科普 = 声调成字', sui.schemeHelpOf(SCHEMES.zhuyin).body.includes('声调键'), true);
+eq('粤拼科普 = 六调键收尾 + 零冲突之因', sui.schemeHelpOf(SCHEMES.jyutping).summary === '什么是粤拼？' && sui.schemeHelpOf(SCHEMES.jyutping).body.includes('不含 q、v、x'), true);
 eq('形码科普 = 字形拆解 + 仅单字取题', sui.schemeHelpOf(SCHEMES.cangjie).body.includes('字形') && sui.schemeHelpOf(SCHEMES.wubi86).body.includes('仅单字'), true);
 
 // -- sw.js 单测（桩环境：classic worker 脚本按模块导入，globals 先就位）--
@@ -821,9 +966,9 @@ let installP = null;
 await runHandler('install', { waitUntil: (p) => { installP = p; } });
 await installP;
 const cacheName = (await globalThis.caches.keys())[0];
-eq('SW CACHE 串随版本 bump', cacheName, 'helian-v0.0.3');
+eq('SW CACHE 串随版本纪律递增（v4 开发周期 -dev8 起）', cacheName, 'helian-v0.0.3-dev8');
 const shellKeys = [...cacheStores.get(cacheName).keys()];
-eq('packs.js / licenses.html / courses.js / zhuyin.js / cangjie.js / wubi.js 入 SHELL', ['/js/packs.js', '/licenses.html', '/js/courses.js', '/js/zhuyin.js', '/js/cangjie.js', '/js/wubi.js'].every(u => shellKeys.includes(u)), true);
+eq('packs.js / licenses.html / courses.js / zhuyin.js / jyutping.js / cangjie.js / wubi.js 入 SHELL', ['/js/packs.js', '/licenses.html', '/js/courses.js', '/js/zhuyin.js', '/js/jyutping.js', '/js/cangjie.js', '/js/wubi.js'].every(u => shellKeys.includes(u)), true);
 eq('#7 新视图 js/css 入 SHELL（审计-§8 纪律）', ['/js/schemes-ui.js', '/css/schemes.css'].every(u => shellKeys.includes(u)), true);
 eq('pack 不进 SHELL（防 addAll 原子失败）', shellKeys.some(u => u.startsWith('/data/packs/')), false);
 

@@ -16,7 +16,7 @@ export const JP_TONE_NAME = {
   1: '阴平', 2: '阴上', 3: '阴去', 4: '阳平', 5: '阳上', 6: '阳去',
 };
 
-// ---- 声母/韵母字母键（标准粤拼拼写共 21 字母；q/v/x 专作调键不入拼写）----
+// ---- 声母/韵母字母键（标准粤拼拼写共 22 字母；q/r/v/x 不入拼写，q/v/x 专作调键）----
 export const JP_SM_KEYS = ['b', 'p', 'm', 'f', 'd', 't', 'n', 'l', 'g', 'k', 'h', 'z', 'c', 's', 'j', 'y', 'w'];
 export const JP_YM_KEYS = ['a', 'i', 'u', 'e', 'o', 'm', 'n', 'g', 'p', 't', 'k'];
 export const JP_TONE_KEY_LIST = ['v', 'x', 'q'];
@@ -29,10 +29,12 @@ export function keysOfToned(toned) {
 
 // 带调音节 → 扁平键序 plan 片段：字母键逐键 + 调键收尾。
 // 阳调双敲 = 单一连击单元：一个 plan 单元 span=2，note「同键连按两下」（§2.3 验收点）
+/** @typedef {{ key: string, label: string, note: string, role: string, span?: number }} JpPlanUnit */
 export function planOfToned(toned) {
   const m = String(toned == null ? '' : toned).trim().toLowerCase().match(/^([a-z]+)([1-6])$/);
   if (!m) return null;
   const tone = +m[2];
+  /** @type {JpPlanUnit[]} */
   const keys = [...m[1]].map((ch) => ({ key: ch, label: ch.toUpperCase(), note: '', role: 'ym' }));
   const tk = JP_TONE_KEYS[tone][0];
   keys.push(tone <= 3
