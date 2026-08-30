@@ -16,7 +16,8 @@
 //     // kind='drill'    间隔重复操练：{unit:'ymKey'|'syllable'|'symbol'|'letter', items?:string[], groups?:[{label, keys}], roots?:{键:字根字}}
 //     //                 ymKey=韵母键（按钮自方案 layout+YM 派生，省略 items）；
 //     //                 syllable=音节（items=高频音节清单，拼音串；SRS 单元即音节，维度不变）；
-//     //                 symbol=符号键（注音：groups 分组清单 声符→介符→韵符→声调键，SRS 单元=键，含声调键〔规格推断〕5）；
+//     //                 symbol=符号键（注音：groups 分组清单 声符→介符→韵符→声调键，SRS 单元=键，含声调键〔规格推断〕5；
+//     //                 粤拼：声母→韵母→六调键收尾，SRS 单元=字母键+调键 v/x/q，SPEC-0004 §7 推断 3）；
 //     //                 letter=仓颉字母键（形码 #5：groups=四类分组；SRS 单元=24 字母，X 不教 Z 非取码；
 //     //                 roots 供「字根 X 在哪键」一键题=字根本字；出字题打首码起的全码）
 //     // kind='practice' 池取题练习：{pools:['chars'|'words2'|'words34'|'sentences'], seq?:'len'}，多池合并；
@@ -42,6 +43,7 @@
 
 import { splitPinyin } from './flypy.js';
 import { ZY_GROUPS } from './zhuyin.js';
+import { JP_SM_KEYS, JP_YM_KEYS, JP_TONE_KEY_LIST } from './jyutping.js';
 import { CJ_CATS, CJ_LETTERS } from './cangjie.js';
 import { WB_ZONES, WB_ROOTS } from './wubi.js';
 
@@ -149,6 +151,47 @@ const ZHUYIN_COURSE = {
   ],
 };
 
+// ---- 粤拼（六调键收尾：带调字表 + 近恒等派生，SPEC-0004 §2.5，issue #10）----
+// 阶 3 形态裁定（T4-边界-4 委实施票）：上游词表截取需人工审口语词/地名/粗口，首版不截取
+// → 阶 3 降级为单字深化（码长升序），课程文案直陈。
+const JYUTPING_COURSE = {
+  scheme: 'jyutping', challengeSub: '每天一个小目标，七天入门粤拼',
+  stages: [
+    { kind: 'keys', view: 'map', name: '键位认知', sub: '标准 26 键 · 六调辨义一张图讲透',
+      body: '粤拼的码 = 粤拼字母串 + 声调键收尾，键盘就是标准 26 键。六个声调分阴阳两组：阴调单键——调 1 阴平按 v、调 2 阴上按 x、调 3 阴去按 q；阳调同键连按两下——调 4 阳平 vv、调 5 阳上 xx、调 6 阳去 qq。声调辨义：同一个韵尾，调不同字就不同——官方例：sikv=色、sekq=錫、sikqq=食。入声音节以 -p/-t/-k 收尾，声调键直接挂在韵尾后。选 q、v、x 三键，是因为标准粤拼拼写字母不含这三个字母，调键与拼写字母零冲突。点击任意键查看说明。' },
+    { kind: 'drill', unit: 'symbol', groups: [
+        { label: `声母 · ${JP_SM_KEYS.length} 键`, keys: JP_SM_KEYS },
+        { label: `韵母 · ${JP_YM_KEYS.length} 键`, keys: JP_YM_KEYS },
+        { label: `六调键 · ${JP_TONE_KEY_LIST.length} 键（阳调同键双敲）`, keys: JP_TONE_KEY_LIST },
+      ],
+      name: '字母与调键操练', sub: '声母 → 韵母 → 六调键收尾（间隔重复）',
+      body: '一键一键练：先声母字母键，再韵母字母键，最后是三个声调键——粤拼无声调不出字，调键是键位学习的收尾。v/x/q 单按出阴调 1/2/3，同键连按两下出阳调 4/5/6（双敲键不另设单元，练的是「同一键连击两下」的节奏）。带 <b class="due-dot">●</b> 的键是到期待复习键（间隔重复调度）。' },
+    { kind: 'practice', pools: ['chars'], name: '单字带调', sub: '声调键首次应用 · 字母串+调键收尾',
+      body: '从内置高频字池按频抽题，每字带调：先拼字母串，最后一键是声调键——阴调单按，阳调同键连按两下。建议先用「全提示」，顺手后切「仅按键」乃至「无提示」。' },
+    { kind: 'practice', pools: ['chars'], seq: 'len', name: '单字深化', sub: '词表首版不截取 · 单字深化、码长升序',
+      body: '词表截取需人工审选（口语词/地名/粗口剔除），首版不截取——本阶按单字深化：仍取高频字池，轮内按码长升序，把含阳调双敲的长键序练顺。想练词组可切拼音系方案。' },
+    { kind: 'mistakes', name: '易错强化', sub: '从你的错词本取题',
+      body: '错词本现有 {n} 条。答错的词会自动进错词本（上限 200 条），这里专门重练它们。' },
+  ],
+  confus: [
+    { label: '调1/2 · v/x', role: 'tone', keys: ['v', 'x'] },
+    { label: '调2/3 · x/q', role: 'tone', keys: ['x', 'q'] },
+    { label: '调1/4 · v 单敲/双敲', role: 'tone', keys: ['v'] },
+    { label: '调2/5 · x 单敲/双敲', role: 'tone', keys: ['x'] },
+    { label: '调3/6 · q 单敲/双敲', role: 'tone', keys: ['q'] },
+    { label: '调4/6 · vv/qq', role: 'tone', keys: ['v', 'q'] },
+  ],
+  challenge: [
+    { tag: 'D1', label: '任意一轮热身', match: { any: true } },
+    { tag: 'D2', label: '调键操练一轮', match: { stage: 1 } },
+    { tag: 'D3', label: '单字带调一轮', match: { stage: 2 } },
+    { tag: 'D4', label: '单字深化一轮', match: { stage: 3 } },
+    { tag: 'D5', label: '声调对抗一轮', match: { prefix: 'confus' } },
+    { tag: 'D6', label: '限时冲刺一轮', match: { modes: ['sprint'] } },
+    { tag: 'D7', label: '混合综合一轮', match: { modes: ['mixed'] } },
+  ],
+};
+
 // ---- 形码：仓颉深教样板 + 速成官方变体（§4.1 仓颉/速成列，issue #5）----
 // 字集 = 内置高频字池（500 字，皆在 cangjie5 pack 内）+ 导入单字；取题仅单字（§3.4）。
 const CJ_ROOT_GROUPS = [
@@ -238,6 +281,7 @@ export const COURSES = {
   ziranma: shuangpinCourse('ziranma'),
   quanpin: QUANPIN_COURSE,
   zhuyin: ZHUYIN_COURSE,
+  jyutping: JYUTPING_COURSE,
   cangjie: CANGJIE_COURSE,
   quick: QUICK_COURSE,
   wubi86: WUBI_COURSE,

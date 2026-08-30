@@ -16,7 +16,7 @@
 </header>
 <main>
   <h1>数据来源与许可</h1>
-  <p class="sub">鹤练是纯静态离线练习站：不收集、不上传任何数据。站内内置的字码数据全部来自开源 Rime 输入法生态，按其许可证随包分发；每一份数据包（<code>data/packs/*.json</code>）内嵌 <code>_meta</code> 出处与许可头。以下为出处、许可与改动说明（LGPL 义务：保留声明、注明出处、标注改动）。</p>
+  <p class="sub">鹤练是纯静态离线练习站：不收集、不上传任何数据。站内内置的字码数据来自开源 Rime 输入法生态与 CanCLID 粤语带调字表，按其许可证随包分发；每一份数据包（<code>data/packs/*.json</code>）内嵌 <code>_meta</code> 出处与许可头。以下为出处、许可与改动说明（LGPL 义务：保留声明、注明出处、标注改动；CC-BY-4.0 义务：署名）。</p>
 
   <h2>五笔 86 字码表</h2>
   <p class="sub">来源：<a href="https://github.com/rime/rime-wubi" target="_blank" rel="noopener">rime/rime-wubi</a> 之 <code>wubi86.dict.yaml</code>，许可 LGPL-3.0。码表源流为极点五笔码表（JidianWubi table，Wozy 制，Google 词频）。改动：截取 GB2312 6,763 常用字、去词组与构词列、一字数码取词频最高者。「五笔字型」「王码」为注册商标，站内以通称「五笔 86」指称，不作商标性使用。</p>
@@ -27,11 +27,14 @@
   <h2>注音带调数据</h2>
   <p class="sub">来源：<a href="https://github.com/rime/rime-terra-pinyin" target="_blank" rel="noopener">rime/rime-terra-pinyin</a> 之 <code>terra_pinyin.dict.yaml</code>，许可 LGPL-3.0。改动：仅截取内置练习池字词的带调拼音（课程字集定稿后将重抽新版）；多音字按池内读音选读；terra 未收简体「吗/们」，取其传统形「嗎/們」之声调。terra 为大陆普通话审音，与台湾正音有零星差异，教学场景可接受。</p>
 
+  <h2>粤拼带调数据</h2>
+  <p class="sub">来源：<a href="https://github.com/rime/rime-cantonese" target="_blank" rel="noopener">rime-cantonese</a>（<b>CanCLID 粤语计算语言学基础建设组</b>）之 <code>jyut6ping3.chars.dict.yaml</code>（带调单字表）与 <code>jyut6ping3.words.dict.yaml</code>（词级声调参照），许可 <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC-BY-4.0</a>（义务：署名，见下）。改动：构建期简繁桥（自建映射小表）后以简体为键、仅截取内置练习池字词；多音字按池内词境择主流读并留审核清单；地名表 <code>jyut6ping3.maps</code> 为 ODbL，不采用以规避 share-alike；懒音/模糊音容错不启用，教学取正音。</p>
+
   <h2>未使用外部数据的方案</h2>
   <p class="sub">小鹤/微软/搜狗/智能ABC/自然码/全拼的键位映射是自写表——键位布局属客观方法事实，按 ADR-0005 先例从公开方案代数规则反推自写，不复制上游文件，无许可负担。内置练习词池（<code>js/data.js</code>）为自建数据。</p>
 
   <h2>致谢</h2>
-  <p class="sub">感谢 Rime 输入法生态（佛振及诸位维护者）与各上游码表制作者的长期开源工作。各许可证全文见上游仓库：<a href="https://www.gnu.org/licenses/lgpl-3.0.html" target="_blank" rel="noopener">LGPL-3.0</a>。</p>
+  <p class="sub">感谢 Rime 输入法生态（佛振及诸位维护者）、各上游码表制作者，以及 CanCLID 粤语计算语言学基础建设组（粤拼带调数据，CC-BY-4.0）的长期开源工作。各许可证全文见上游仓库：<a href="https://www.gnu.org/licenses/lgpl-3.0.html" target="_blank" rel="noopener">LGPL-3.0</a>、<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC-BY-4.0</a>。</p>
 </main>
 <footer class="foot">鹤练 · 数据全部保存在你的浏览器本地 — 无账号、无上传、无遥测 · <a href="./">返回练习</a></footer>
 </body>

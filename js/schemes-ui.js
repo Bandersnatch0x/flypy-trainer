@@ -10,10 +10,11 @@ import { store } from './store.js';
 export const FLAGSHIP_ID = 'flypy'; // 旗舰·默认：顶层独享全宽大卡（T5-D1）
 
 // 三层分组（§5.1）：旗舰小鹤顶层 + 音码组/形码组各带一行科普。
-// 组内次序 = 音码：自然码/微软/搜狗/智能ABC（双拼子标签）→ 全拼 → 注音；形码：仓颉 → 速成 → 五笔 86。
+// 组内次序 = 音码：自然码/微软/搜狗/智能ABC（双拼子标签）→ 全拼 → 注音 → 粤拼（#10 追加末位，一期次序不动）；
+// 形码：仓颉 → 速成 → 五笔 86。
 export const GROUPS = [
-  { id: 'phonetic', title: '音码', blurb: '音码 · 码即读音（全拼、五种双拼、注音）',
-    ids: ['ziranma', 'mspy', 'sogou', 'abc', 'quanpin', 'zhuyin'] },
+  { id: 'phonetic', title: '音码', blurb: '音码 · 码即读音（全拼、五种双拼、注音、粤拼）',
+    ids: ['ziranma', 'mspy', 'sogou', 'abc', 'quanpin', 'zhuyin', 'jyutping'] },
   { id: 'shape', title: '形码', blurb: '形码 · 码即字形（仓颉、速成、五笔）',
     ids: ['cangjie', 'quick', 'wubi86'] },
 ];
@@ -27,6 +28,7 @@ export const CARD_FEATURES = {
   abc: '老牌智能ABC 的双拼键位',
   quanpin: '码即拼音本身，零键位映射，提速为核',
   zhuyin: '41 键大千布局 · 声调成字',
+  jyutping: '六声调辨义 · 阴调单键、阳调同键双敲',
   cangjie: '字形拆成字母序列，熟字根即识码；速成取其首尾二码',
   quick: '速成 = 仓颉首尾二码，节奏更快',
   wubi86: '字根查表出码，先认字根再自由练习',
@@ -88,6 +90,15 @@ export function schemeHelpOf(scheme) {
         所以注音的码 = 符号键 + 声调键收尾。</p>`,
     };
   }
+  if (scheme.id === 'jyutping') {
+    return {
+      summary: '什么是粤拼？',
+      body: `<p>粤拼（粤语拼音）用拉丁字母给粤语标音，六个声调辨义：同一音节调不同字就不同。</p>
+        <p>码 = 粤拼字母串 + <b>声调键</b>收尾。阴调单键：调 1/2/3 分别按 v、x、q；
+        阳调同键连按两下：调 4/5/6 分别是 vv、xx、qq。选这三个键，是因为标准粤拼拼写不含 q、v、x，零冲突。
+        入声音节以 -p/-t/-k 收尾，声调键直接挂在韵尾后。</p>`,
+    };
+  }
   // 双拼族：翘舌换位与零声母规则自方案表派生（审计-§9 文案面数据驱动）
   const spec = Object.entries(scheme.SM_NAME || {})
     .map(([k, v]) => `${v} 在 <b>${k === ';' ? ';' : k.toUpperCase()}</b> 键`).join('、');
@@ -140,7 +151,7 @@ async function buildCard(cur, env, s, flagship) {
 
   // ① 名 + 范式标签（双拼加子标签）
   const tags = [s.paradigm === 'shape' ? '形码' : '音码'];
-  if (s.id !== 'quanpin' && s.id !== 'zhuyin' && s.paradigm === 'phonetic') tags.push('双拼');
+  if (s.id !== 'quanpin' && s.id !== 'zhuyin' && s.id !== 'jyutping' && s.paradigm === 'phonetic') tags.push('双拼');
   const badge = flagship ? '<b class="flagbadge">旗舰 · 默认</b>' : '';
   const grayTag = s.id === 'wubi86' ? `<span class="formtag gray">${cardTagOf(s.id)}</span>` : '';
 
