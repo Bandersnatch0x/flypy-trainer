@@ -356,4 +356,3 @@ export const SCHEMES = {
 
 export const DEFAULT_SCHEME = 'flypy'; // 小鹤仍是旗舰与默认（map-Q3a）
 export function getScheme(id) { return SCHEMES[id] || SCHEMES[DEFAULT_SCHEME]; }
-export const SCHEME_LIST = Object.values(SCHEMES).map(s => ({ id: s.id, name: s.name }));

@@ -12,7 +12,7 @@ globalThis.localStorage = {
 
 import { splitPinyin, SYLLABLES } from '../js/flypy.js';
 import { parseUserdb, parseDictYaml, parseCustomPhrase, parsePlain, sniffAndParse, mergeEntries, weightedSample } from '../js/parsers.js';
-import { SCHEMES, getScheme, SCHEME_LIST, DEFAULT_SCHEME } from '../js/schemes.js';
+import { SCHEMES, getScheme, DEFAULT_SCHEME } from '../js/schemes.js';
 import { store, migrate } from '../js/store.js';
 
 let pass = 0, fail = 0;
@@ -29,7 +29,7 @@ const code = (scheme, py) => scheme.codeOf({ word: '测', py });
 
 // ---- 1. 方案接口完整性（§3.1）----
 eq('默认方案仍为小鹤', DEFAULT_SCHEME, 'flypy');
-eq('注册表 10 方案（+五笔 86 降级形态，#6）', SCHEME_LIST.length, 10);
+eq('注册表 10 方案（+五笔 86 降级形态，#6）', Object.values(SCHEMES).length, 10);
 for (const s of Object.values(SCHEMES)) {
   eq(`${s.id} 接口七件齐`, ['id', 'name', 'paradigm', 'codeOf', 'planOf', 'layout', 'activate'].every(k => s[k] !== undefined), true);
   eq(`${s.id} paradigm 随范式`, s.paradigm, ['cangjie', 'quick', 'wubi86'].includes(s.id) ? 'shape' : 'phonetic');
@@ -512,6 +512,10 @@ eq('zhuyin 空格键键帽（宽键料）', zy.layout.keyLabel(' '), { main: 'ˉ
 // -- 课程五阶（§4.1 注音列：阶 1 声调键收尾；验收条目 13）--
 const zyCourse = courseOf('zhuyin');
 eq('zhuyin 阶 0 = 41 键键盘图认知', zyCourse.stages[0].kind === 'keys' && zyCourse.stages[0].view === 'map' && zyCourse.stages[0].sub.includes('41 键'), true);
+eq('zhuyin 阶 0 键位科普事实（˙在7/ㄢ在0/ㄦ挂-/ㄥ在底行//调键 6 3 4 7，P2）', (() => {
+  const b = zyCourse.stages[0].body;
+  return [b.includes('˙（7）'), b.includes('ㄢ（8/9/0）'), b.includes('ㄦ挂在「-」'), b.includes('「/」承载ㄥ'), b.includes('6/3/4/7')];
+})(), [true, true, true, true, true]);
 const zyDrill = zyCourse.stages[1];
 eq('zhuyin 阶 1 = 符号操练（SRS 单元=符号键）', zyDrill.kind === 'drill' && zyDrill.unit === 'symbol', true);
 eq('zhuyin 阶 1 分组规模：声符 21/介符 3/韵符 13/声调键 5', zyDrill.groups.map(g => g.keys.length), [21, 3, 13, 5]);
@@ -733,7 +737,7 @@ eq('内置高频字池 500 字全部可出五笔题', POOL.chars.every(({ w }) =
 const jsFiles = fs.readdirSync(new URL('../js/', import.meta.url)).filter(f => f.endsWith('.js')).map(f => 'js/' + f);
 const scanned = ['index.html', ...jsFiles].map(f => fs.readFileSync(new URL('../' + f, import.meta.url), 'utf8')).join('\n');
 eq('命名边界：站内零「五笔字型/王码」', /五笔字型|王码/.test(scanned), false);
-eq('命名边界：方案名即通称', [wb.id, wb.name, SCHEME_LIST.find(s => s.id === 'wubi86').name], ['wubi86', '五笔 86', '五笔 86']);
+eq('命名边界：方案名即通称', [wb.id, wb.name, Object.values(SCHEMES).find(s => s.id === 'wubi86').name], ['wubi86', '五笔 86', '五笔 86']);
 
 // ---- v3 #7：方案库 UI 数据模型（SPEC-0003 §5.1/§5.2/§5.4/§5.5，验收条目 17/20 的纯逻辑面）----
 const sui = await import('../js/schemes-ui.js');
@@ -754,6 +758,7 @@ eq('十卡皆备一句话特点', Object.keys(SCHEMES).every(id => typeof sui.CA
 eq('自然码特点 = 与微软差 3 处（T4）', sui.CARD_FEATURES.ziranma, '与微软双拼仅差 3 处');
 eq('注音特点 = 41 键大千布局 · 声调成字（T4）', sui.CARD_FEATURES.zhuyin, '41 键大千布局 · 声调成字');
 eq('速成卡互注文案（§5.1）', sui.CARD_FEATURES.quick, '速成 = 仓颉首尾二码，节奏更快');
+eq('仓颉卡回指速成（互注双向，§5.1 / P4）', sui.CARD_FEATURES.cangjie.includes('速成'), true);
 
 // -- 状态行：课程形态标签 + 五笔灰调降级标签（条目 17 / T5-D6）--
 eq('课程形态：五阶课程（双拼/仓颉/速成/注音）', ['flypy', 'mspy', 'zhuyin', 'cangjie', 'quick'].map(sui.courseFormOf),

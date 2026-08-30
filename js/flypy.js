@@ -10,7 +10,6 @@ export const YM = {
 
 export const SM_KEYS = { zh: 'v', ch: 'i', sh: 'u' };
 export const SM_NAME = { v: 'zh', i: 'ch', u: 'sh' };
-export const ROWS = ['qwertyuiop', 'asdfghjkl', 'zxcvbnm'];
 
 export function normalizeSyllable(s) {
   return s.toLowerCase().replace(/ü/g, 'v').trim();
