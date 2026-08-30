@@ -9,6 +9,14 @@ const check = (name, cond) => {
   else { fail++; console.error('FAIL ' + name); }
 };
 
+// #7：方案切换走顶栏芯片 → 分组弹层（设置页下拉已废除）
+async function switchScheme(p, id, settle = 300) {
+  await p.click('#schemeChip');
+  await p.waitForSelector('#schemePop:not(.hidden)');
+  await p.click(`#schemePop button[data-scheme="${id}"]`);
+  await p.waitForTimeout(settle);
+}
+
 const browser = await chromium.launch({ channel: 'msedge', headless: true });
 const page = await browser.newPage();
 page.on('pageerror', (e) => { fail++; console.error('PAGEERROR ' + e.message); });
@@ -85,9 +93,7 @@ const foreign = reqs.filter(u => !u.startsWith(BASE) && !u.includes('fonts.g'));
 check('无外部数据请求', foreign.length === 0);
 
 // 11. V2：方案切换 / 集市 / 徽章 / 日历 / 冲刺入口
-await page.goto(BASE + '/#/settings', { waitUntil: 'networkidle' });
-await page.selectOption('#setScheme', 'mspy');
-await page.waitForTimeout(200);
+await switchScheme(page, 'mspy');
 await page.goto(BASE + '/#/practice', { waitUntil: 'networkidle' });
 check('微软方案键盘含分号键', await page.locator('#kb .key[data-key=";"]').count().then(n => n === 1));
 check('冲刺模式按钮存在', await page.locator('#modes button[data-mode="sprint"]').count().then(n => n === 1));
@@ -116,18 +122,18 @@ await page.goto(BASE + '/#/mistakes', { waitUntil: 'networkidle' });
 check('Rime 导出按钮', await page.locator('#exportRime').count().then(n => n === 1));
 await page.goto(BASE + '/#/course', { waitUntil: 'networkidle' });
 check('七日挑战卡', await page.locator('#stages li.challenge').count().then(n => n === 1));
-await page.goto(BASE + '/#/settings', { waitUntil: 'networkidle' });
-await page.selectOption('#setScheme', 'flypy');
+await switchScheme(page, 'flypy');
 
-// 12. v3：新方案可切可练 + 练习中切换重算 queue
+// 12. v3：新方案可切可练 + 练习中切换重算 queue（Alt+S 弹层入口，不落入输入流）
 await page.goto(BASE + '/#/practice', { waitUntil: 'networkidle' });
 await page.click('#modes button[data-mode="chars"]');
 await page.waitForTimeout(200);
-await page.evaluate(() => {
-  const sel = document.querySelector('#setScheme');
-  sel.value = 'quanpin';
-  sel.dispatchEvent(new Event('change'));
-});
+await page.locator('#inbox').focus();
+await page.keyboard.press('Alt+s');
+await page.waitForTimeout(150);
+check('Alt+S 练习中开弹层且不落输入流', await page.locator('#schemePop').evaluate(el => !el.classList.contains('hidden'))
+  && await page.locator('#inbox').inputValue().then(v => v === ''));
+await page.click('#schemePop button[data-scheme="quanpin"]');
 await page.waitForTimeout(300);
 check('练习中切换提示重新出题', await page.locator('#toast').innerText().then(t => t.includes('重新出题')));
 check('全拼码文本为拼音串', await page.locator('#hint b').innerText().then(t => /^[a-z]+$/.test(t)));
@@ -137,18 +143,10 @@ const qpKbKeys = await page.evaluate(() => import('/js/schemes.js').then(m => {
   return s.layout.ROWS.join('').length + s.layout.extraKeys.length;
 }));
 check('全拼键盘键数随布局', await page.locator('#kb .key').count().then(n => n === qpKbKeys));
-await page.evaluate(() => {
-  const sel = document.querySelector('#setScheme');
-  sel.value = 'ziranma';
-  sel.dispatchEvent(new Event('change'));
-});
-await page.waitForTimeout(300);
+await switchScheme(page, 'ziranma');
+await page.goto(BASE + '/#/practice', { waitUntil: 'networkidle' });
 check('自然码单字两键可练', await page.locator('#hint b').innerText().then(t => /^[a-z]{2}$/.test(t)));
-await page.evaluate(() => {
-  const sel = document.querySelector('#setScheme');
-  sel.value = 'flypy';
-  sel.dispatchEvent(new Event('change'));
-});
+await switchScheme(page, 'flypy');
 
 // 13. v3 #2：data pack — 首访不下载 / 激活懒加载 / SW cache-first / 离线冒烟
 //     做法：独立干净上下文；断网用 context.setOffline(true) 真实切断网络，
@@ -218,9 +216,7 @@ check('小鹤进度按方案落盘', await page.evaluate(() =>
 check('单字练习正文数据驱动渲染', await page.locator('#stageBody h3').innerText().then(t => t === '单字练习'));
 check('开始练习按钮在', await page.locator('#goStage').count().then(n => n === 1));
 // 切全拼：课程从阶 0 起（进度独立），阶 0 = 弱键诊断热力图
-await page.goto(BASE + '/#/settings', { waitUntil: 'networkidle' });
-await page.selectOption('#setScheme', 'quanpin');
-await page.waitForTimeout(200);
+await switchScheme(page, 'quanpin', 200);
 await page.goto(BASE + '/#/course', { waitUntil: 'networkidle' });
 check('全拼五阶+挑战卡渲染', await page.locator('#stages li').count().then(n => n === 6));
 check('全拼阶 0 = 弱键诊断', await page.locator('#stages li:not(.challenge)').first().innerText().then(t => t.includes('弱键诊断')));
@@ -249,17 +245,13 @@ await page.click('#modes button[data-mode="confus:0"]');
 await page.waitForTimeout(200);
 check('全拼易混模式可出题', await page.locator('#word').innerText().then(t => t.trim().length > 0));
 // 切回小鹤：课程进度保留（per-scheme），挑战卡副标按范式文案
-await page.goto(BASE + '/#/settings', { waitUntil: 'networkidle' });
-await page.selectOption('#setScheme', 'flypy');
-await page.waitForTimeout(200);
+await switchScheme(page, 'flypy', 200);
 await page.goto(BASE + '/#/course', { waitUntil: 'networkidle' });
 check('切回小鹤进度仍在阶 2', await page.locator('#stages li.on span').first().innerText().then(t => t.includes('单字练习')));
 check('七日挑战卡副标为范式文案', await page.locator('#stages li.challenge').innerText().then(t => t.includes('七天入门双拼')));
 
 // 16. v3 #4：注音方案 —— pack 状态流 / 41 键大千键盘 / 声调键 / 符号提示 / 五阶课程
-await page.goto(BASE + '/#/settings', { waitUntil: 'networkidle' });
-await page.selectOption('#setScheme', 'zhuyin');
-await page.waitForTimeout(900); // 激活状态流：正在准备资料包 → 就绪
+await switchScheme(page, 'zhuyin', 900); // 激活状态流：正在准备资料包 → 就绪
 await page.goto(BASE + '/#/practice', { waitUntil: 'networkidle' });
 check('注音键盘 42 键元（41 键位 + 空格调键）', await page.locator('#kb .key').count().then(n => n === 42));
 check('注音数字行在键盘', await page.locator('#kb .key[data-key="1"]').count().then(n => n === 1));
@@ -294,9 +286,7 @@ check('注音阶 1 符号操练按钮 42 个（21+3+13+5）', await page.locator
 check('注音阶 1 声调键收尾分组在', await page.locator('#finalkeys').innerText().then(t => t.includes('声调键')));
 check('注音阶 1 分组标题齐（声符/介符/韵符/声调键）', await page.locator('#finalkeys .drillgroup').count().then(n => n === 4));
 // 17. v3 #5：仓颉深教样板 + 速成 —— 字表查询 / 取题仅单字 / 字根认知五阶 / 首尾派生
-await page.goto(BASE + '/#/settings', { waitUntil: 'networkidle' });
-await page.selectOption('#setScheme', 'cangjie');
-await page.waitForTimeout(900); // 激活状态流：正在准备仓颉单字码表（~269KB）→ 就绪
+await switchScheme(page, 'cangjie', 900); // 激活状态流：正在准备仓颉单字码表（~269KB）→ 就绪
 await page.goto(BASE + '/#/practice', { waitUntil: 'networkidle' });
 check('仓颉单字出码（1–5 字母，x 不作首码）', await page.locator('#hint b').innerText().then(t => /^[a-y]{1,5}$/.test(t)));
 check('仓颉引导为步骤话术', await page.locator('#guide').innerText().then(t => t.includes('第 1 步')));
@@ -331,9 +321,7 @@ await page.waitForTimeout(150);
 check('仓颉阶 1 操练按钮 24 字母（X 不教、Z 非取码）', await page.locator('#finalkeys button').count().then(n => n === 24));
 check('仓颉阶 1 四类分组标题', await page.locator('#finalkeys .drillgroup').count().then(n => n === 4));
 // 速成：独立方案身份、首尾二码、共用字表即切即用
-await page.goto(BASE + '/#/settings', { waitUntil: 'networkidle' });
-await page.selectOption('#setScheme', 'quick');
-await page.waitForTimeout(500); // cangjie5 已在内存：速成接载即时就绪
+await switchScheme(page, 'quick', 500); // cangjie5 已在内存：速成接载即时就绪
 await page.goto(BASE + '/#/practice', { waitUntil: 'networkidle' });
 check('速成码 ≤2 键（首尾派生）', await page.locator('#hint b').innerText().then(t => /^[a-y]{1,2}$/.test(t)));
 const qkPair = await page.evaluate(async () => {
@@ -345,14 +333,10 @@ await page.goto(BASE + '/#/course', { waitUntil: 'networkidle' });
 check('速成五阶+挑战卡渲染', await page.locator('#stages li').count().then(n => n === 6));
 check('速成阶 1 含首尾码速认话术', await page.locator('#stages li:not(.challenge)').nth(1).innerText().then(t => t.includes('首尾码速认')));
 // 切回小鹤收尾
-await page.goto(BASE + '/#/settings', { waitUntil: 'networkidle' });
-await page.selectOption('#setScheme', 'flypy');
-await page.waitForTimeout(200);
+await switchScheme(page, 'flypy', 200);
 
 // 18. v3 #6：五笔 86 降级形态 —— 单字查表 / 字根总表页 / 自由练习 / 提示兜底
-await page.goto(BASE + '/#/settings', { waitUntil: 'networkidle' });
-await page.selectOption('#setScheme', 'wubi86');
-await page.waitForTimeout(900); // 激活状态流：正在准备五笔 86 字码表（~82KB）→ 就绪
+await switchScheme(page, 'wubi86', 900); // 激活状态流：正在准备五笔 86 字码表（~82KB）→ 就绪
 await page.goto(BASE + '/#/practice', { waitUntil: 'networkidle' });
 await page.click('input[name="hint"][value="full"]');
 await page.click('#modes button[data-mode="chars"]'); // 自由练习 = 单字取题（前序模式五笔可能不供给）
@@ -400,15 +384,131 @@ await page.click('#goFree');
 await page.waitForTimeout(250);
 check('自由练习回到练习页', await page.evaluate(() => location.hash), '#/practice');
 check('自由练习取题仍为单字', await page.locator('#word').innerText().then(t => [...t].length === 1 && t !== '∅'));
-// 多字词模式：池被 codeOf 全滤 → 显式空态（不出假会话）
-await page.click('#modes button[data-mode="words2"]');
+// 多字词模式：形码变化面隐藏（§5.4）；处理器仍在 —— 直接派发 click 验证池被 codeOf 全滤的显式空态
+check('五笔下二字词模式已隐藏', await page.locator('#modes button[data-mode="words2"]').evaluate(el => el.style.display === 'none'));
+await page.evaluate(() => document.querySelector('#modes button[data-mode="words2"]').click());
 await page.waitForTimeout(200);
 check('五笔多字词模式显式空态（仅取单字）', await page.locator('#guide').innerText().then(t => t.includes('仅取单字')));
 check('五笔空态不产生会话进度', await page.locator('#sDone').innerText().then(t => t === '0/0'));
 // 切回小鹤收尾
+await switchScheme(page, 'flypy', 200);
+
+// 19. v3 #7：方案库 UI —— #/schemes 十卡三层分组 / 设置页摘要行 / 芯片弹层 Alt+S Esc / 气泡 / 形码藏模式 / 预下载 / 动效与 reduced-motion
+// 19a. 方案库页：10 卡、三层分组、旗舰大卡、五层信息、五笔灰调、速成互注
+await page.goto(BASE + '/#/schemes', { waitUntil: 'networkidle' });
+check('方案库页头文案', await page.locator('.schemelib-head').innerText().then(t => t.includes('方案库') && t.includes('音码打声、形码打形')));
+check('方案库恰 10 卡', await page.locator('.scard').count().then(n => n === 10));
+check('旗舰大卡独享顶层（徽章+使用中）', await page.locator('.scard.flagship').count().then(n => n === 1)
+  && await page.locator('.scard.flagship').innerText().then(t => t.includes('旗舰 · 默认') && t.includes('使用中')));
+check('音码组科普行', await page.locator('.schemegroup[data-group="phonetic"] h2').innerText().then(t => t.includes('音码 · 码即读音')));
+check('形码组科普行', await page.locator('.schemegroup[data-group="shape"] h2').innerText().then(t => t.includes('形码 · 码即字形')));
+check('音码组 6 卡 / 形码组 3 卡', JSON.stringify([
+  await page.locator('.schemegroup[data-group="phonetic"] .scard').count(),
+  await page.locator('.schemegroup[data-group="shape"] .scard').count()]) === JSON.stringify([6, 3]));
+check('速成卡紧邻仓颉卡', await page.locator('.schemegroup[data-group="shape"] .scard').evaluateAll(
+  els => els.map(e => e.dataset.scheme)).then(ids => ids.indexOf('quick') - ids.indexOf('cangjie') === 1));
+check('速成卡互注文案', await page.locator('.scard[data-scheme="quick"] .scard-feat').innerText().then(t => t.includes('仓颉首尾二码')));
+check('卡片迷你键盘预览渲染（注音显数字行）', await page.locator('.scard[data-scheme="zhuyin"] .kbmini .key[data-key="1"]').count().then(n => n === 1));
+check('卡片迷你键盘预览渲染（形码显字根角标）', await page.locator('.scard[data-scheme="cangjie"] .kbmini .key[data-key="d"] .ym').innerText().then(t => t === '木'));
+check('卡片状态行 = 课程形态 + 数据状态', await page.locator('.scard[data-scheme="flypy"] .scard-state').innerText().then(t => t.includes('五阶课程') && t.includes('无需下载'))
+  && await page.locator('.scard[data-scheme="quanpin"] .scard-state').innerText().then(t => t.includes('提速课程')));
+check('五笔卡灰调降级标签直陈', await page.locator('.scard[data-scheme="wubi86"] .formtag.gray').innerText().then(t => t.includes('暂无五阶课程'))
+  && await page.locator('.scard[data-scheme="wubi86"] .scard-feat').innerText().then(t => t.length > 0));
+check('切回态卡片自带进度摘要', await page.locator('.scard[data-scheme="flypy"]').innerText().then(t => t.includes('课程第')));
+// 19b. 设置页：下拉废除 → 摘要行跳方案库
 await page.goto(BASE + '/#/settings', { waitUntil: 'networkidle' });
-await page.selectOption('#setScheme', 'flypy');
-await page.waitForTimeout(200);
+check('设置页硬编码下拉已删', await page.locator('#setScheme').count().then(n => n === 0));
+check('设置页当前方案摘要行', await page.locator('#setSchemeNow').innerText().then(t => t.includes('小鹤双拼') && t.includes('音码')));
+check('摘要行更换入口跳方案库', await page.locator('#setSchemeGo').getAttribute('href').then(h => h === '#/schemes'));
+// 19c. 芯片 + 弹层 + Alt+S + Esc 焦点归还
+const chipH = await page.locator('#schemeChip').boundingBox().then(b => b.height);
+check('芯片触控目标 ≥44px', chipH >= 44);
+await page.click('#schemeChip');
+await page.waitForTimeout(150);
+check('弹层两组 10 项 + 进方案库入口', await page.locator('#schemePop .popgroup').count().then(n => n === 2)
+  && await page.locator('#schemePop button[data-scheme]').count().then(n => n === 10)
+  && await page.locator('#schemePop .poplib').count().then(n => n === 1));
+check('当前项朱砂勾', await page.locator('#schemePop button[data-scheme="flypy"]').evaluate(el => el.classList.contains('cur') && el.querySelector('.tick').textContent === '✓'));
+await page.keyboard.press('Escape');
+await page.waitForTimeout(120);
+check('Esc 关闭弹层且焦点归还芯片', await page.locator('#schemePop').evaluate(el => el.classList.contains('hidden'))
+  && await page.evaluate(() => document.activeElement && document.activeElement.id === 'schemeChip'));
+await page.keyboard.press('Alt+s');
+await page.waitForTimeout(120);
+check('Alt+S 开弹层', await page.locator('#schemePop').evaluate(el => !el.classList.contains('hidden')));
+await page.click('#schemePop .poplib');
+await page.waitForTimeout(150);
+check('弹层底部进入方案库', await page.evaluate(() => location.hash), '#/schemes');
+// 19d. 形码变化面：二字词/多字词/整句隐藏，切回音码复现
+await switchScheme(page, 'cangjie', 400); // 前序已缓存：即切即用
+await page.goto(BASE + '/#/practice', { waitUntil: 'networkidle' });
+check('形码隐藏二字词/多字词/整句', await page.evaluate(() => ['words2', 'words34', 'sentences']
+  .every(m => document.querySelector(`#modes button[data-mode="${m}"]`).style.display === 'none')));
+check('形码保留单字/混合/冲刺/词库/错词', await page.evaluate(() => ['chars', 'mixed', 'sprint', 'personal', 'mistakes']
+  .every(m => document.querySelector(`#modes button[data-mode="${m}"]`).style.display !== 'none')));
+check('形码科普块数据驱动（仅单字取题）', await page.locator('#helpBlock').innerText().then(t => t.includes('形码'))
+  && await page.locator('#helpBlock summary').innerText().then(t => t.includes('仓颉')));
+await switchScheme(page, 'flypy', 300);
+await page.goto(BASE + '/#/practice', { waitUntil: 'networkidle' });
+check('切回音码模式复现', await page.evaluate(() => ['words2', 'words34', 'sentences']
+  .every(m => document.querySelector(`#modes button[data-mode="${m}"]`).style.display !== 'none')));
+check('音码科普块随方案恢复', await page.locator('#helpBlock summary').innerText().then(t => t.includes('小鹤双拼')));
+// 19e. 动效：视图入场 .enter + 键盘逐行级联（纯 CSS 运行态断言）
+await page.goto(BASE + '/#/course', { waitUntil: 'networkidle' });
+check('视图入场带 enter 类', await page.locator('#view-course').evaluate(el => el.classList.contains('enter')));
+const kbAnim = await page.evaluate(() => {
+  const rows = document.querySelectorAll('#kb .kbrow');
+  return [...rows].map(r => getComputedStyle(r).animationName);
+});
+check('键盘行级联动画生效（行距 30ms 内收）', kbAnim.length >= 3 && kbAnim.every(n => n === 'kbRowRise'));
+const kbDelays = await page.evaluate(() => [...document.querySelectorAll('#kb .kbrow')]
+  .map(r => parseFloat(getComputedStyle(r).animationDelay)));
+check('级联行距 30ms、总时长 ≤250ms', kbDelays[1] - kbDelays[0] === 0.03 && kbDelays.at(-1) + 0.16 <= 0.26);
+// 19f. reduced-motion 全站兜底：动画与长 transition 一律停置
+await page.emulateMedia({ reducedMotion: 'reduce' });
+await page.goto(BASE + '/#/practice', { waitUntil: 'networkidle' });
+const rm = await page.evaluate(() => {
+  const row = document.querySelector('#kb .kbrow');
+  const view = document.querySelector('#view-practice');
+  return {
+    rowAnim: getComputedStyle(row).animationDuration,
+    viewAnim: getComputedStyle(view).animationDuration,
+  };
+});
+check('reduced-motion 停置级联/升入动画', parseFloat(rm.rowAnim) < 0.001 && parseFloat(rm.viewAnim) < 0.001);
+await switchScheme(page, 'mspy', 300);
+check('reduced-motion 下切换仍可用', await page.locator('#kb .key[data-key=";"]').count().then(n => n === 1));
+await page.emulateMedia({ reducedMotion: null });
+await switchScheme(page, 'flypy', 200);
+
+// 20. v3 #7：干净上下文 —— 首访气泡一次性 + 未下载态预下载按钮（SW message 通道）
+const ctx3 = await browser.newContext();
+const p3 = await ctx3.newPage();
+await p3.goto(BASE + '/#/practice', { waitUntil: 'networkidle' });
+check('首访静默入小鹤（默认不拦截）', await p3.locator('#schemeChip .chipname').innerText().then(t => t === '小鹤双拼'));
+check('芯片一次性气泡首现', await p3.locator('#chipBubble').evaluate(el => el.classList.contains('show')));
+check('气泡 flag 落设置', await p3.evaluate(() => JSON.parse(localStorage.getItem('flypy.v1.settings'))?.data?.chipTipSeen === true));
+await p3.click('#word');
+await p3.waitForTimeout(200);
+check('任意点击气泡即消', await p3.locator('#chipBubble').evaluate(el => !el.classList.contains('show')));
+await p3.reload({ waitUntil: 'networkidle' });
+check('气泡不再现（一次性）', await p3.locator('#chipBubble').evaluate(el => !el.classList.contains('show')));
+// 干净上下文无缓存：三带包方案皆显「未下载」，预下载走 SW message 通道
+await p3.evaluate(() => navigator.serviceWorker.ready);
+await p3.reload({ waitUntil: 'networkidle' }); // 确保 SW 接管（message 通道需 controller）
+await p3.goto(BASE + '/#/schemes', { waitUntil: 'networkidle' });
+check('未下载态显包大小', await p3.locator('.scard[data-scheme="cangjie"] .datastate').innerText().then(t => t.includes('未下载 ~269KB'))
+  && await p3.locator('.scard[data-scheme="wubi86"] .datastate').innerText().then(t => t.includes('未下载 ~82KB')));
+check('未下载者带预下载按钮', await p3.locator('.scard[data-scheme="zhuyin"] .scard-actions button').count().then(n => n === 2));
+await p3.locator('.scard[data-scheme="zhuyin"] .scard-actions button').nth(1).click();
+await p3.waitForTimeout(900);
+check('预下载完成转已缓存（SW message 通道）', await p3.locator('.scard[data-scheme="zhuyin"] .datastate').innerText().then(t => t === '已缓存 ✓'));
+check('预下载落 SW 缓存', await p3.evaluate(async () => {
+  for (const k of await caches.keys()) if (await (await caches.open(k)).match('/data/packs/zhuyin-tones.v1.json')) return true;
+  return false;
+}));
+await p3.close();
+await ctx3.close();
 
 await browser.close();
 console.log(`\n${pass} passed, ${fail} failed`);
