@@ -1,6 +1,7 @@
 {
   "name": "鹤练 · 小鹤双拼练习",
   "short_name": "鹤练",
+  "version": "0.0.3",
   "description": "小鹤双拼在线打字练习：本地词库导入 / 五阶课程 / 纯静态零后端",
   "start_url": "/",
   "display": "standalone",

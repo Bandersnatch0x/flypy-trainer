@@ -1,4 +1,6 @@
 {
+  "name": "flypy-trainer",
+  "version": "0.0.3",
   "devDependencies": {
     "playwright-core": "^1.62.1",
     "typescript": "^7.0.2"
