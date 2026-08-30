@@ -2,11 +2,15 @@
 // tools/build-packs.mjs — v3 data pack 构建管线（SPEC-0003 §3.5，issue #2）
 //
 // 构建期联网拉取上游 Rime 字典（开发者侧允许；运行时零外链红线不变），
-// 抽取三份版本化紧凑 {字: 码} JSON 到 data/packs/：
+// 抽取版本化紧凑 {字: 码} JSON 到 data/packs/：
 //   - wubi86.v1.json      rime/rime-wubi wubi86.dict.yaml，截 GB2312 6,763 常用字
 //   - cangjie5.v1.json    rime/rime-cangjie cangjie5.base.dict.yaml，base 全量单字
 //   - zhuyin-tones.v1.json rime/rime-terra-pinyin terra_pinyin.dict.yaml，
 //                         截取字集 = 内置池 js/data.js 的字词（课程字集定稿 #3/#4 后允许 .v2 重抽）
+//   - jyutping-tones.v1.json CanCLID/rime-cantonese jyut6ping3.chars/words.dict.yaml（CC-BY-4.0），
+//                         构建期简繁桥后以简体为键（SPEC-0004 §2，issue #10）：
+//                         映射小表 tools/jyutping/s2t.json（自写），一对多择主流字形留审核清单
+//                         （buildJyutping 产出 tools/jyutping/bridge-review.md）
 //
 // 决策记录：
 //   - 上游原始字典不入部署目录、不入版本控制：缓存于 tools/.cache/（.gitignore），
@@ -201,6 +205,167 @@ function buildZhuyin(rows, builtin) {
   return { table, fallbacks, missing };
 }
 
+// ---------- 4) jyutping-tones.v1.json：CanCLID 带调字表 + 构建期简繁桥（包以简体为键，SPEC-0004 §2）----
+// 桥（§2.2）：内置池为简体、上游纯繁体——构建期把池字经自建映射小表折到繁体查音，
+// 包直接以简体为键，运行时零映射逻辑。恒等字（简体形即表内字）直查；映射表只收需折转字。
+const JP_ONE_TO_MANY = {
+  // 简→繁一对多的主流字形择定（池内词境）；审核清单见 tools/jyutping/bridge-review.md
+  发: ['發', '取「發」（发展/发布义）；「髮」义池内无词境'],
+  钟: ['鐘', '取「鐘」（时钟/分钟义）；姓氏「鍾」池内无词境'],
+  历: ['歷', '取「歷」（经历/历史义）；「曆」（历书）池内无词境'],
+  汇: ['匯', '取「匯」（汇聚/汇款义）；「彙」（汇总旧形）池内无词境'],
+  签: ['簽', '取「簽」（签约/标签义）；「籤」（竹签）池内无词境'],
+  广: ['廣', '取「廣」（广州/广告义）；「广」（jim2，山崖罕字）与简体形撞车，必须折转'],
+  干: ['幹', '取「幹」（干活/干部义，池内词境皆 gàn）；「乾」（干燥）与天干「干」池内无词境'],
+  么: ['麼', '取「麼」（什么/怎么义）；「么」（maa1，幺的异体）与简体形撞车，必须折转'],
+  惊: ['驚', '取「驚」（geng1，惊惧义）；表内简体形「惊」仅存异读，必须折转'],
+};
+
+// 多音字择读（§2.2 风险③）：上游权重列为输入法候选权重、非通用频次，权重序择主流在
+// 少数字上失准（或与罕字/异体读音撞车）——此表按池内词境人工择定带调音节
+// （值必在表内，构建期断言；惊=驚经字形映射折转，吃取表内最优 gat1 不再另择）。
+const JP_READ_PICK = {
+  只: 'zi2',   // 「只」义（只是/只有）；误取 zek3（隻的异体）
+  合: 'hap6',  // 合作/合法；误取 ho4
+  面: 'min6',  // 面孔/面包；误取 min2
+  着: 'zoek6', // 随着/意味着；误取 zoek3（衣着）
+  了: 'liu5',  // 助词了/了解；误取 liu1
+  行: 'hang4', // 进行/行动主流读；行业/银行经词表整词命中（hong4）
+  什: 'sam6',  // 什么（什麼 sam6 mo1）；误取 sap6（什錦）
+  么: 'mo1',   // 什么/怎么的「麼」；误取 maa1（幺的异体读）
+  会: 'wui6',  // 会议/不会；误取 wui5
+  中: 'zung1', // 中国/中间（阴平）；误取 zung3（中奖义）
+  还: 'waan4', // 还是/还有；误取 syun4（书面异读）
+  她: 'taa1',  // 她/他义；误取 ji1（伊的异体）
+  日: 'jat6',  // 日子；误取 mik6
+  应: 'jing1', // 应该/应当（阴平）；误取 jing3（应声义）
+  内: 'noi6',  // 内外/内容；误取 naap6（入内异读）
+  许: 'heoi2', // 许多/允许；误取 fu2
+  红: 'hung4', // 红色；误取 gung1（红同工的异读）
+  失: 'sat1',  // 失去；误取 jat6
+  息: 'sik1',  // 信息/休息；误取 sak1
+  突: 'dat6',  // 突然；误取 duk1
+  石: 'sek6',  // 石头；误取 daam3（石担异读）
+  弟: 'dai6',  // 兄弟；误取 tai5
+  切: 'cit3',  // 一切/切实；误取 cai3（切合义异读）
+  结: 'git3',  // 结果/结合；误取 lit3
+  令: 'ling6', // 命令/令到；误取 lim1
+  喜: 'hei2',  // 喜欢；误取 ci3
+  可: 'ho2',   // 可以；误取 hak1
+  谁: 'seoi4', // 谁的；误取 seoi2
+  告: 'gou3',  // 告诉/报告；误取 guk1
+  度: 'dou6',  // 程度/度量；误取 dok6
+  单: 'daan1', // 简单/单独；误取 sim4（单于义）
+  数: 'sou3',  // 数字/数据（去声）；误取 sou2
+  提: 'tai4',  // 提供/提高；误取 si4（提防义）
+  发: 'faat3', // 发展/出发（经桥取發）；误取 but3
+  而: 'ji4',   // 而且；误取 nang4
+};
+
+function parseJpChars(text) {
+  const reads = new Map(); // 繁体字 → [{t: 带调音节, w: 权重}]（原文序保留，权重降序择主流）
+  for (const cols of parseRimeDict(text)) {
+    const [ch, pyRaw, wRaw] = cols;
+    if (!ch || !pyRaw || [...ch].length !== 1) continue;
+    const toned = pyRaw.trim().toLowerCase();
+    if (!/^[a-z]+[1-6]$/.test(toned)) continue;
+    if (!reads.has(ch)) reads.set(ch, []);
+    reads.get(ch).push({ t: toned, w: parseFloat((wRaw || '').replace('%', '')) || 0 });
+  }
+  for (const rs of reads.values()) rs.sort((a, b) => b.w - a.w);
+  return reads;
+}
+
+function parseJpWords(text) {
+  const words = new Map(); // 繁体词 → {toned, w}
+  for (const cols of parseRimeDict(text)) {
+    const [word, pyRaw, wRaw] = cols;
+    if (!word || !pyRaw) continue;
+    const toned = pyRaw.trim().toLowerCase();
+    const syls = toned.split(/\s+/);
+    if ([...word].length !== syls.length || !syls.every(s => /^[a-z]+[1-6]$/.test(s))) continue;
+    const w = parseFloat((wRaw || '').replace('%', '')) || 0;
+    const prev = words.get(word);
+    if (!prev || w > prev.w) words.set(word, { toned, w });
+  }
+  return words;
+}
+
+function buildJyutping(charText, wordText, builtin, s2t) {
+  const reads = parseJpChars(charText);
+  const words = parseJpWords(wordText);
+  const tradOf = (ch) => s2t[ch] || ch;
+  // 择读：多音字按池内词境人工择定（JP_READ_PICK）；余取权重序主流读（构建期已断言 pick 在表）
+  const pickRead = (ch) => {
+    const rs = reads.get(tradOf(ch));
+    if (!rs || !rs.length) return null;
+    const pick = JP_READ_PICK[ch];
+    return (pick && rs.find(r => r.t === pick)?.t) || rs[0].t;
+  };
+  const table = {};
+  const missing = [];       // 桥后仍无读音的字（codeOf null 过滤，§2.2 风险②）
+  const relaxedWords = [];  // 词表未收、按逐字择读拼接的词（词级变调未覆盖，在案）
+  const seen = new Set();
+  const items = [...builtin.chars, ...builtin.words2, ...builtin.words34];
+  for (const { w } of items) {
+    if (seen.has(w)) continue;
+    seen.add(w);
+    if ([...w].length === 1) {
+      const t = pickRead(w);
+      if (t) table[w] = t;
+      else missing.push(w);
+      continue;
+    }
+    // 词：首选上游词表整词命中（词级声调含变调事实）；次选逐字择读拼接
+    const tradWord = [...w].map(tradOf).join('');
+    const direct = words.get(tradWord);
+    if (direct) { table[w] = direct.toned; continue; }
+    const syls = [];
+    let ok = true;
+    for (const ch of w) {
+      const t = pickRead(ch);
+      if (!t) { ok = false; break; }
+      syls.push(t);
+    }
+    if (ok) { table[w] = syls.join(' '); relaxedWords.push(w); }
+    else missing.push(w);
+  }
+  return { table, missing, relaxedWords, charCount: reads.size };
+}
+
+function writeBridgeReview({ mapped, identity, mappedWordChars, poolUniq, missing, relaxedWords }) {
+  // 审核清单（§2.2 风险①：一对多择主流并留单）：构建期幂等产出，tracked 供人工逐条过目
+  const s2t = JSON.parse(fs.readFileSync(path.join(ROOT, 'tools', 'jyutping', 's2t.json'), 'utf8'));
+  const entries = Object.entries(s2t).filter(([k]) => !k.startsWith('_')).sort((a, b) => a[0].localeCompare(b[0], 'zh'));
+  const lines = [
+    '# 简繁桥审核清单（jyutping-tones 构建期产出，幂等）',
+    '',
+    `字集口径：内置池 js/data.js 去重词 ${poolUniq}（单字 500 + 词 ${poolUniq - 500}）。`,
+    `单字简繁桥：恒等直查 ${identity}，映射小表折转 ${mapped - mappedWordChars}；另有词用字 ${mappedWordChars} 条经映射折转。映射小表共 ${mapped} 条（自写，可逐条审）。`,
+    `桥后无读音被过滤 ${missing.length} 字${missing.length ? '：' + missing.join('') : ''}。`,
+    '',
+    '## 一对多字的主流字形择定',
+    '',
+    ...Object.entries(JP_ONE_TO_MANY).map(([s, [t, why]]) => `- ${s} → ${t}：${why}`),
+    '',
+    '## 多音字择读（上游权重序失准字，按池内词境人工择定带调音节）',
+    '',
+    ...Object.entries(JP_READ_PICK).map(([s, t]) => `- ${s} → ${t}`),
+    '',
+    '## 全量映射（简体 → 繁体查音形）',
+    '',
+    ...entries.map(([s, t]) => `- ${s} → ${t}${JP_ONE_TO_MANY[s] ? '（一对多，见上）' : ''}`),
+    '',
+    '## 词级逐字拼接清单（上游词表未收，按各字主流读拼接；词级变调未覆盖）',
+    '',
+    `共 ${relaxedWords.length} 词：`,
+    '',
+    ...relaxedWords.map(w => `- ${w}`),
+    '',
+  ];
+  fs.writeFileSync(path.join(ROOT, 'tools', 'jyutping', 'bridge-review.md'), lines.join('\n'));
+}
+
 // ---------- 主流程 ----------
 const sha256 = (buf) => crypto.createHash('sha256').update(buf).digest('hex');
 const write = (name, obj) => {
@@ -266,4 +431,45 @@ write('zhuyin-tones.v1.json', {
   ...zyTable,
 });
 
-console.log('[done] 三份 pack 生成完毕');
+// ---- jyutping-tones ----
+const jpCharBuf = await fetchUpstream('rime/rime-cantonese', 'jyut6ping3.chars.dict.yaml', 'jyut6ping3.chars.dict.yaml');
+const jpWordBuf = await fetchUpstream('rime/rime-cantonese', 'jyut6ping3.words.dict.yaml', 'jyut6ping3.words.dict.yaml');
+const jpS2tFile = path.join(ROOT, 'tools', 'jyutping', 's2t.json');
+const jpS2t = JSON.parse(fs.readFileSync(jpS2tFile, 'utf8'));
+delete jpS2t._meta;
+for (const [s, [t]] of Object.entries(JP_ONE_TO_MANY)) {
+  if (jpS2t[s] !== t) throw new Error(`一对多裁定与映射表不一致：${s} → ${jpS2t[s]}（裁定 ${t}）`);
+}
+{
+  // 多音字择读断言：pick 音节必须在该字桥后读音集合内（防失准静默失效）
+  const reads = parseJpChars(jpCharBuf.toString('utf8'));
+  for (const [s, t] of Object.entries(JP_READ_PICK)) {
+    const rs = reads.get(jpS2t[s] || s);
+    if (!rs || !rs.some(r => r.t === t)) throw new Error(`多音字择读不在表内：${s} → ${t}`);
+  }
+}
+const jp = buildJyutping(jpCharBuf.toString('utf8'), jpWordBuf.toString('utf8'), BUILTIN, jpS2t);
+const jpPoolUniq = new Set([...BUILTIN.chars, ...BUILTIN.words2, ...BUILTIN.words34].map(e => e.w));
+const jpTableChars = Object.keys(jp.table).filter(k => [...k].length === 1);
+const jpMapped = Object.keys(jpS2t).length;
+const jpMappedWordChars = jpMapped - [...jpPoolUniq].filter(w => [...w].length === 1 && jpS2t[w]).length;
+const jpIdentity = [...jpPoolUniq].filter(w => [...w].length === 1 && !jpS2t[w]).length;
+writeBridgeReview({ mapped: jpMapped, identity: jpIdentity, mappedWordChars: jpMappedWordChars, poolUniq: jpPoolUniq.size, missing: jp.missing, relaxedWords: jp.relaxedWords });
+console.log(`[info] jyutping-tones 覆盖 ${Object.keys(jp.table).length} 条（单字 ${jpTableChars.length}/500 池，词级逐字拼接 ${jp.relaxedWords.length}），桥 ${jpMapped} 映射（含词用字 ${jpMappedWordChars}）+${jpIdentity} 恒等，缺 ${jp.missing.length}${jp.missing.length ? '：' + jp.missing.join('') : ''}`);
+write('jyutping-tones.v1.json', {
+  _meta: {
+    id: 'jyutping-tones', v: 1, name: '粤拼带调数据 · 内置池字词（简繁桥后以简体为键）',
+    source: 'CanCLID/rime-cantonese — jyut6ping3.chars.dict.yaml（带调单字表）+ jyut6ping3.words.dict.yaml（词级声调参照）',
+    upstream: 'https://github.com/rime/rime-cantonese',
+    upstreamSha256: sha256(jpCharBuf),
+    upstreamWordsSha256: sha256(jpWordBuf),
+    license: 'CC-BY-4.0', licenseUrl: 'https://creativecommons.org/licenses/by/4.0/',
+    attribution: 'CanCLID 粤语计算语言学基础建设组（rime-cantonese）',
+    notes: '字集 = 内置池 data.js 字词；构建期简繁桥（自写映射小表 tools/jyutping/s2t.json）后以简体为键，运行时零映射；多音字取权重最高主流读；词首选上游词表整词命中（含变调），未收词按逐字主流读拼接（清单见 tools/jyutping/bridge-review.md）；jyut6ping3.maps（ODbL）不采用；懒音/模糊音容错不启用，教学取正音',
+    entries: Object.keys(jp.table).length,
+    bridge: { mapped: jpMapped, identity: jpIdentity, missing: jp.missing },
+  },
+  ...jp.table,
+});
+
+console.log('[done] 四份 pack 生成完毕');
