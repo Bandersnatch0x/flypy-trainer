@@ -7,9 +7,10 @@
 //   challengeSub: string,      // 七日挑战卡副标文案
 //   stages: [                  // 恰 5 阶，形状固定；公共字段 name（阶名）/ sub（副标题）/ body（正文，'{n}'=错词数占位）
 //     // kind='keys'     键位图认知/诊断：{view:'map'} 键位说明图 | {view:'heat'} 弱键热力图（点键即弱键特训）
-//     // kind='drill'    间隔重复操练：{unit:'ymKey'|'syllable', items?:string[]}
+//     // kind='drill'    间隔重复操练：{unit:'ymKey'|'syllable'|'symbol', items?:string[], groups?:[{label, keys}]}
 //     //                 ymKey=韵母键（按钮自方案 layout+YM 派生，省略 items）；
-//     //                 syllable=音节（items=高频音节清单，拼音串；SRS 单元即音节，维度不变）
+//     //                 syllable=音节（items=高频音节清单，拼音串；SRS 单元即音节，维度不变）；
+//     //                 symbol=符号键（注音：groups 分组清单 声符→介符→韵符→声调键，SRS 单元=键，含声调键〔规格推断〕5）
 //     // kind='practice' 池取题练习：{pools:['chars'|'words2'|'words34'|'sentences']}，多池合并；
 //     //                 会话模式名 = pools 以 '+' 连接
 //     // kind='mistakes' 错词本取题（无额外字段；会话模式名 'mistakes'）
@@ -19,7 +20,7 @@
 //     // 三形：
 //     // {label, role:'sm'|'ym', a, b}  键位对——a/b 经方案声/韵表映射为物理键，按 plan 触达过滤（双拼）
 //     // {label, ends:[u,v]}            音节尾对——词条任一音节以 u 或 v 结尾即入选（全拼前后鼻音类）
-//     // {label, keys:[...]}            物理键直给——形码形近字母对预留接口（#5 供形近字母对）
+//     // {label, role, keys:[...]}      物理键直给——注音翘舌/鼻音等对（形码形近字母对 #5 供）
 //   ],
 //   challenge: [               // 七日挑战谓词（读范式课程数据，〔规格推断〕6）
 //     // {tag, label, match}；match 四形：
@@ -30,6 +31,7 @@
 // 全拼为「提速为核」骨架变体（T4-Q1）。字集/词集直取内置池（js/data.js），不新增数据。
 
 import { splitPinyin } from './flypy.js';
+import { ZY_GROUPS } from './zhuyin.js';
 
 // ---- 双拼族（五变体共用骨架）----
 const SP_CONFUS = [
@@ -95,6 +97,46 @@ const QUANPIN_COURSE = {
   ],
 };
 
+// ---- 注音（大千布局：声调键阶 1 收尾——无声调不出字，T4-Q4；字集 = 内置池 + 带调截取包）----
+const ZHUYIN_COURSE = {
+  scheme: 'zhuyin', challengeSub: '每天一个小目标，七天入门注音',
+  stages: [
+    { kind: 'keys', view: 'map', name: '键盘认知', sub: '一张图看懂 41 键大千布局',
+      body: '大字是各键承载的注音符号，小字是物理键位。数字行左起是ㄅㄉ列（1/2）、韵符ㄞㄟㄠㄡ与调键ˊˇˋ（9/0、6/3/4）；字母行右侧一列收韵符与ㄥㄦ，底行含介符ㄩ与调键˙。第一声ˉ就是空格键。点击任意键查看说明。' },
+    { kind: 'drill', unit: 'symbol', groups: [
+        { label: `声符 ${ZY_GROUPS.sm.length} 键`, keys: ZY_GROUPS.sm },
+        { label: `介符 ${ZY_GROUPS.jie.length} 键`, keys: ZY_GROUPS.jie },
+        { label: `韵符 ${ZY_GROUPS.ym.length} 键`, keys: ZY_GROUPS.ym },
+        { label: `声调键 ${ZY_GROUPS.tone.length} 键`, keys: ZY_GROUPS.tone },
+      ],
+      name: '符号操练', sub: '声符 → 介符 → 韵符 → 声调键（间隔重复）',
+      body: '一键一键练：先声符，再接介符与韵符，最后是五个声调键——注音无声调不出字，声调键是键位学习的收尾。带 <b class="due-dot">●</b> 的键是到期待复习键（间隔重复调度）。' },
+    { kind: 'practice', pools: ['chars'], name: '单字练习', sub: '单字含调，声调键首次应用',
+      body: '从内置高频字池按频抽题，每字带调：先符号键、最后一键是声调键（第一声按空格）。建议先用「全提示」，顺手后切「仅按键」乃至「无提示」。' },
+    { kind: 'practice', pools: ['words2'], name: '词组练习', sub: '二字词连贯输入',
+      body: '从内置常用二字词池按频抽题，每个音节都以声调键收尾。建议先用「全提示」，顺手后切「仅按键」。' },
+    { kind: 'mistakes', name: '易错强化', sub: '从你的错词本取题',
+      body: '错词本现有 {n} 条。答错的词会自动进错词本（上限 200 条），这里专门重练它们。' },
+  ],
+  confus: [
+    { label: 'ㄓ/ㄗ', role: 'sm', keys: ['5', 'y'] },
+    { label: 'ㄔ/ㄘ', role: 'sm', keys: ['t', 'h'] },
+    { label: 'ㄕ/ㄙ', role: 'sm', keys: ['g', 'n'] },
+    { label: 'ㄈ/ㄏ', role: 'sm', keys: ['z', 'c'] },
+    { label: 'ㄢ/ㄤ', role: 'ym', keys: ['0', ';'] },
+    { label: 'ㄣ/ㄥ', role: 'ym', keys: ['p', '/'] },
+  ],
+  challenge: [
+    { tag: 'D1', label: '任意一轮热身', match: { any: true } },
+    { tag: 'D2', label: '符号操练一轮', match: { stage: 1 } },
+    { tag: 'D3', label: '单字一轮', match: { stage: 2 } },
+    { tag: 'D4', label: '词组一轮', match: { stage: 3 } },
+    { tag: 'D5', label: '易混对抗一轮', match: { prefix: 'confus' } },
+    { tag: 'D6', label: '限时冲刺一轮', match: { modes: ['sprint'] } },
+    { tag: 'D7', label: '混合综合一轮', match: { modes: ['mixed'] } },
+  ],
+};
+
 export const COURSES = {
   flypy: shuangpinCourse('flypy'),
   mspy: shuangpinCourse('mspy'),
@@ -102,6 +144,7 @@ export const COURSES = {
   abc: shuangpinCourse('abc'),
   ziranma: shuangpinCourse('ziranma'),
   quanpin: QUANPIN_COURSE,
+  zhuyin: ZHUYIN_COURSE,
 };
 export function courseOf(schemeId) { return COURSES[schemeId] || COURSES.flypy; }
 

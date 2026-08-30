@@ -23,19 +23,23 @@ function eq(name, got, want) {
 }
 
 const fly = SCHEMES.flypy, mspy = SCHEMES.mspy, sogou = SCHEMES.sogou, abc = SCHEMES.abc,
-  zrm = SCHEMES.ziranma, qp = SCHEMES.quanpin;
+  zrm = SCHEMES.ziranma, qp = SCHEMES.quanpin, zy = SCHEMES.zhuyin;
 const code = (scheme, py) => scheme.codeOf({ word: '测', py });
 
 // ---- 1. 方案接口完整性（§3.1）----
 eq('默认方案仍为小鹤', DEFAULT_SCHEME, 'flypy');
-eq('注册表 6 方案', SCHEME_LIST.length, 6);
+eq('注册表 7 方案', SCHEME_LIST.length, 7);
 for (const s of Object.values(SCHEMES)) {
   eq(`${s.id} 接口七件齐`, ['id', 'name', 'paradigm', 'codeOf', 'planOf', 'layout', 'activate'].every(k => s[k] !== undefined), true);
   eq(`${s.id} paradigm=phonetic`, s.paradigm, 'phonetic');
   eq(`${s.id} layout.ROWS 存在`, Array.isArray(s.layout.ROWS), true);
   eq(`${s.id} keyLabel 函数`, typeof s.layout.keyLabel, 'function');
   eq(`${s.id} specialOf 函数`, typeof s.layout.specialOf, 'function');
-  eq(`${s.id} activate 立即就绪`, await s.activate(), undefined);
+  if (s.id === 'zhuyin') {
+    eq('zhuyin activate 挂 zhuyin-tones 包（带调数据依赖，§2）', s.packId, 'zhuyin');
+  } else {
+    eq(`${s.id} activate 立即就绪`, await s.activate(), undefined);
+  }
 }
 eq('getScheme 兜底小鹤', getScheme('nope').id, 'flypy');
 
@@ -443,6 +447,88 @@ eq('学完小鹤后切全拼进度从阶 0 起', store.getCourse('quanpin'), { s
 
 // -- syllablesOf（音节序列 = 方案无关通货）--
 eq('syllablesOf 空格分词', syllablesOf('zhong guo'), ['zhong', 'guo']);
+
+// ---- v3 #4：注音方案（SPEC-0003 §2/§3.2/§4.1/§4.2/§7 条目 13，T4-Q4/Q5/Q6）----
+const zym = await import('../js/zhuyin.js');
+const { keysOfToned, TONE_KEYS: ZY_TK } = zym;
+
+// -- 大千键位 xlit（T1-§3：keymap_bopomofo 一行 xlit）--
+eq('xlit 声符三列 ㄅ1/ㄉ2/ㄓ5', [zym.KEY_OF_ZM['ㄅ'], zym.KEY_OF_ZM['ㄉ'], zym.KEY_OF_ZM['ㄓ']], ['1', '2', '5']);
+eq('xlit 介符 ㄧu/ㄨj/ㄩm', [zym.KEY_OF_ZM['ㄧ'], zym.KEY_OF_ZM['ㄨ'], zym.KEY_OF_ZM['ㄩ']], ['u', 'j', 'm']);
+eq('xlit 韵符 ㄚ8/ㄝ,/ㄦ-', [zym.KEY_OF_ZM['ㄚ'], zym.KEY_OF_ZM['ㄝ'], zym.KEY_OF_ZM['ㄦ']], ['8', ',', '-']);
+eq('xlit 37 符号 ↔ 37 键互逆', Object.keys(zym.KEY_OF_ZM).length === 37 && Object.keys(zym.ZM_OF_KEY).length === 37
+  && Object.entries(zym.KEY_OF_ZM).every(([s, k]) => zym.ZM_OF_KEY[k] === s), true);
+eq('声调键 ˉ=空格 ˊ=6 ˇ=3 ˋ=4 ˙=7', [ZY_TK[1], ZY_TK[2], ZY_TK[3], ZY_TK[4], ZY_TK[5]], [' ', '6', '3', '4', '7']);
+
+// -- 拼音→注音派生（≥12 用例；例外全枚举：空韵/y-w 头/ü/er/ê/呣/儿化/轻声=调 5）--
+const ZY_CASES = [
+  ['zhong1', '5j/ '], ['shuang1', 'gj; '], ['pin1', 'qup '], ['hua2', 'cj86'],
+  ['liu2', 'xu.6'], ['hui4', 'cjo4'], ['lun2', 'xjp6'], ['yin1', 'up '],
+  ['yong4', 'm/4'], ['wu2', 'j6'], ['wei4', 'jo4'], ['yuan2', 'm06'],
+  // 空韵（ㄭ 不写韵符）
+  ['zhi1', '5 '], ['shi4', 'g4'], ['zi4', 'y4'], ['ri4', 'b4'], ['ci2', 'h6'],
+  // y/w 头、ü（含 jqx 后 u）、er、ê、呣、儿化、轻声=调 5
+  ['nv3', 'sm3'], ['ju1', 'rm '], ['lve4', 'xm,4'], ['er2', '-6'],
+  ['eh1', ', '], ['m1', 'aj '], ['r5', '-7'], ['ma5', 'a87'],
+];
+for (const [toned, want] of ZY_CASES) eq(`注音派生 ${toned}`, keysOfToned(toned), want);
+eq('例外·裸 r 非调 5 不可派生', keysOfToned('r4'), null);
+eq('例外·非法音节不可派生', keysOfToned('zz9'), null);
+eq('带调包音节全量可派生（课程字集内无死角）', (() => {
+  let total = 0, bad = 0;
+  for (const [w, v] of Object.entries(zhuyPack)) {
+    if (w.startsWith('_')) continue;
+    for (const s of v.split(' ')) { total++; if (!keysOfToned(s)) bad++; }
+  }
+  return [total > 3000, bad];
+})(), [true, 0]);
+
+// -- 方案层：带调数据依赖（表未就绪不出题）、码 = 符号键 + 声调键 --
+zy.table = { 中: 'zhong1', 华: 'hua2', 中华: 'zhong1 hua2' };
+eq('zhuyin.codeOf 单字（调 1 收尾为空格）', zy.codeOf({ word: '中' }), '5j/ ');
+eq('zhuyin.codeOf 词组', zy.codeOf({ word: '中华', py: 'zhong hua' }), '5j/ cj86');
+eq('zhuyin.displayOf 显注音符号+调号', zy.displayOf({ word: '中华' }), 'ㄓㄨㄥˉ ㄏㄨㄚˊ');
+eq('zhuyin 缺字 → null（取题过滤）', zy.codeOf({ word: '龘' }), null);
+const zpl = zy.planOf('5j/ ', { word: '中' });
+eq('zhuyin plan 扁平键序（声调键收尾）', zpl.keys.map(k => k.key), ['5', 'j', '/', ' ']);
+eq('zhuyin plan roles 声/介/韵/调', zpl.keys.map(k => k.role), ['sm', 'jie', 'ym', 'tone']);
+eq('zhuyin plan label = 注音符号（错键反馈用）', zpl.keys.map(k => k.label), ['ㄓ', 'ㄨ', 'ㄥ', '空格']);
+eq('zhuyin plan groups 带调音节', zpl.groups, [{ syl: 'zhong1', start: 0, len: 4 }]);
+zy.table = null;
+eq('zhuyin 表未就绪 → 不出题（懒加载接缝）', zy.codeOf({ word: '中' }), null);
+
+// -- 41 键大千布局（含数字行；空格调键由 extraKeys 承载，T4-Q5）--
+eq('zhuyin 数字行在 ROWS', zy.layout.ROWS[0], '1234567890-');
+eq('zhuyin 41 键位 + 空格调键 = 42 键元', zy.layout.ROWS.join('').length + zy.layout.extraKeys.length, 42);
+eq('zhuyin 键帽主显注音符号/角标物理键', zy.layout.keyLabel('1'), { main: 'ㄅ', sub: '1', title: 'ㄅ · 键 1' });
+eq('zhuyin 空格键键帽（宽键料）', zy.layout.keyLabel(' '), { main: 'ˉ', sub: '空格', title: '声调一（ˉ）· 空格键' });
+
+// -- 课程五阶（§4.1 注音列：阶 1 声调键收尾；验收条目 13）--
+const zyCourse = courseOf('zhuyin');
+eq('zhuyin 阶 0 = 41 键键盘图认知', zyCourse.stages[0].kind === 'keys' && zyCourse.stages[0].view === 'map' && zyCourse.stages[0].sub.includes('41 键'), true);
+const zyDrill = zyCourse.stages[1];
+eq('zhuyin 阶 1 = 符号操练（SRS 单元=符号键）', zyDrill.kind === 'drill' && zyDrill.unit === 'symbol', true);
+eq('zhuyin 阶 1 分组规模：声符 21/介符 3/韵符 13/声调键 5', zyDrill.groups.map(g => g.keys.length), [21, 3, 13, 5]);
+eq('zhuyin 阶 1 以声调键 5 收尾（无声调不出字）', zyDrill.groups[3].keys, [' ', '6', '3', '4', '7']);
+eq('zhuyin 阶 2 单字含调 / 阶 3 词组', [zyCourse.stages[2].pools, zyCourse.stages[3].pools], [['chars'], ['words2']]);
+eq('zhuyin 阶 4 = 错词本', zyCourse.stages[4].kind, 'mistakes');
+eq('zhuyin 易混对皆物理键直给', zyCourse.confus.every(p => Array.isArray(p.keys) && p.keys.length === 2), true);
+eq('zhuyin 挑战谓词 D2=符号操练', challengeMatch(zyCourse.challenge[1].match, 'finaldrill', zyCourse), true);
+eq('zhuyin 挑战谓词 D3=单字', challengeMatch(zyCourse.challenge[2].match, 'chars', zyCourse), true);
+eq('zhuyin 挑战谓词 D4=词组', challengeMatch(zyCourse.challenge[3].match, 'words2', zyCourse), true);
+// 易混对两侧皆可取题（真实带调表 + 内置池）
+zy.table = Object.fromEntries(Object.entries(zhuyPack).filter(([k]) => !k.startsWith('_')));
+const zyBase = [...POOL.chars, ...POOL.words2].map(({ w, p }) => ({ word: w, py: p }));
+for (const pair of zyCourse.confus) {
+  const touch = (k) => zyBase.filter(e => {
+    const c = zy.codeOf(e);
+    return c && zy.planOf(c, e).keys.some(pk => pk.key === k && pk.role === pair.role);
+  }).length;
+  eq(`zhuyin 易混对 ${pair.label} 两侧可取题`, pair.keys.every(k => touch(k) > 0), true);
+}
+zy.table = null;
+
+// -- syllablesOf 余例 --
 eq('syllablesOf 连写串切分', syllablesOf('zhongguo'), ['zhong', 'guo']);
 eq('syllablesOf 空', syllablesOf(''), []);
 
@@ -479,9 +565,9 @@ let installP = null;
 await runHandler('install', { waitUntil: (p) => { installP = p; } });
 await installP;
 const cacheName = (await globalThis.caches.keys())[0];
-eq('SW CACHE 串随版本 bump', cacheName, 'helian-v0.0.5');
+eq('SW CACHE 串随版本 bump', cacheName, 'helian-v0.0.3-dev4');
 const shellKeys = [...cacheStores.get(cacheName).keys()];
-eq('packs.js / licenses.html / courses.js 入 SHELL', ['/js/packs.js', '/licenses.html', '/js/courses.js'].every(u => shellKeys.includes(u)), true);
+eq('packs.js / licenses.html / courses.js / zhuyin.js 入 SHELL', ['/js/packs.js', '/licenses.html', '/js/courses.js', '/js/zhuyin.js'].every(u => shellKeys.includes(u)), true);
 eq('pack 不进 SHELL（防 addAll 原子失败）', shellKeys.some(u => u.startsWith('/data/packs/')), false);
 
 const packUrlFull = 'http://localhost:4173/data/packs/cangjie5.v1.json';

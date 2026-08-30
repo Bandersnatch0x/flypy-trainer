@@ -256,6 +256,48 @@ await page.goto(BASE + '/#/course', { waitUntil: 'networkidle' });
 check('切回小鹤进度仍在阶 2', await page.locator('#stages li.on span').first().innerText().then(t => t.includes('单字练习')));
 check('七日挑战卡副标为范式文案', await page.locator('#stages li.challenge').innerText().then(t => t.includes('七天入门双拼')));
 
+// 16. v3 #4：注音方案 —— pack 状态流 / 41 键大千键盘 / 声调键 / 符号提示 / 五阶课程
+await page.goto(BASE + '/#/settings', { waitUntil: 'networkidle' });
+await page.selectOption('#setScheme', 'zhuyin');
+await page.waitForTimeout(900); // 激活状态流：正在准备资料包 → 就绪
+await page.goto(BASE + '/#/practice', { waitUntil: 'networkidle' });
+check('注音键盘 42 键元（41 键位 + 空格调键）', await page.locator('#kb .key').count().then(n => n === 42));
+check('注音数字行在键盘', await page.locator('#kb .key[data-key="1"]').count().then(n => n === 1));
+check('注音空格声调宽键在键盘', await page.locator('#kb .key[data-key=" "]').count().then(n => n === 1));
+check('注音码文本显注音符号+调号', await page.locator('#hint b').innerText().then(t => /[\u3105-\u3129]/.test(t) && /[ˉˊˇˋ˙]/.test(t)));
+const zyCode = await page.evaluate(async () => {
+  const m = await import('/js/schemes.js');
+  const s = m.getScheme('zhuyin');
+  return s.codeOf({ word: document.querySelector('#word').textContent });
+});
+check('注音符号码含声调键收尾', typeof zyCode === 'string' && /[ 6347]$/.test(zyCode));
+for (const ch of zyCode) await page.locator('#inbox').press(ch === ' ' ? 'Space' : ch);
+await page.waitForTimeout(300);
+check('注音带调输入整词推进', await page.locator('#sDone').innerText().then(t => t.startsWith('1/')));
+const zyWant = await page.evaluate(async () => {
+  const m = await import('/js/schemes.js');
+  const s = m.getScheme('zhuyin');
+  const w = document.querySelector('#word').textContent;
+  const c = s.codeOf({ word: w });
+  return s.planOf(c, { word: w }).keys[0].key;
+});
+const zyWrong = zyWant === 'q' ? 'w' : 'q';
+await page.locator('#inbox').press(zyWrong);
+check('注音错键反馈显注音符号', await page.locator('#fb').innerText().then(t =>
+  t.includes('应是') && /[\u3105-\u3129]|空格/.test(t)));
+await page.goto(BASE + '/#/course', { waitUntil: 'networkidle' });
+check('注音五阶+挑战卡渲染', await page.locator('#stages li').count().then(n => n === 6));
+check('注音阶 0 键盘图 42 键元', await page.locator('#kbmap .key').count().then(n => n === 42));
+await page.locator('#stages li:not(.challenge)').nth(1).click();
+await page.waitForTimeout(150);
+check('注音阶 1 符号操练按钮 42 个（21+3+13+5）', await page.locator('#finalkeys button').count().then(n => n === 42));
+check('注音阶 1 声调键收尾分组在', await page.locator('#finalkeys').innerText().then(t => t.includes('声调键')));
+check('注音阶 1 分组标题齐（声符/介符/韵符/声调键）', await page.locator('#finalkeys .drillgroup').count().then(n => n === 4));
+// 切回小鹤收尾
+await page.goto(BASE + '/#/settings', { waitUntil: 'networkidle' });
+await page.selectOption('#setScheme', 'flypy');
+await page.waitForTimeout(200);
+
 await browser.close();
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

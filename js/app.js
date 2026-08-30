@@ -3,6 +3,7 @@ import { getScheme, SCHEME_LIST, SCHEMES } from './schemes.js';
 import { courseOf, confusKeys, confusEndsMatch, syllablesOf, challengeMatch } from './courses.js';
 import { sniffAndParse, mergeEntries, weightedSample, parsePlain } from './parsers.js';
 import { store, migrate } from './store.js';
+import { PACKS as DATA_PACKS, packState } from './packs.js';
 import { sound } from './sound.js';
 import { downloadShareCard } from './share.js';
 
@@ -47,6 +48,7 @@ function buildKeyboard(container, { heat = false, map = false } = {}) {
   const { ROWS, extraKeys, keyLabel, specialOf } = scheme.layout;
   const rows = [...ROWS];
   if (extraKeys.length) rows.push(extraKeys.join(''));
+  container.classList.toggle('wide', rows.some(r => r.length > 10)); // 41 键大千：弹性键宽（T4-Q5）
   for (const row of rows) {
     const r = document.createElement('div');
     r.className = 'kbrow';
@@ -57,7 +59,7 @@ function buildKeyboard(container, { heat = false, map = false } = {}) {
       d.className = 'key' + (spec ? ' special' : '');
       d.dataset.key = ch;
       d.innerHTML = `<span class="sm">${esc(lab.main)}</span><span class="ym">${esc(lab.sub)}</span>`;
-      if (map) d.title = [spec ? `声母 ${spec}` : '', lab.sub ? `韵母 ${lab.sub}` : ''].filter(Boolean).join('｜') || `键 ${lab.main}`;
+      if (map) d.title = lab.title || [spec ? `声母 ${spec}` : '', lab.sub ? `韵母 ${lab.sub}` : ''].filter(Boolean).join('｜') || `键 ${lab.main}`;
       els[ch] = d;
       r.appendChild(d);
     }
@@ -82,9 +84,25 @@ function buildKeyboard(container, { heat = false, map = false } = {}) {
 }
 keyEls = buildKeyboard($('kb'));
 
-function applyScheme(id) {
+// 数据包激活状态流（§5.5 三态 2）：正在准备资料包 → 就绪「开练」/ 失败「点按重试」
+async function ensurePack(s) {
+  if (!s.packId || packState(s.packId) === 'ready') return true;
+  const p = DATA_PACKS[s.packId];
+  toast(`正在准备${p.name}（~${p.kb}KB）…`);
+  try {
+    await s.activate();
+    toast(`${s.name}就绪，开练`);
+    return true;
+  } catch {
+    toast(`${p.name}未就绪 —— 稍后可点按重试`);
+    return false;
+  }
+}
+
+async function applyScheme(id) {
   const next = getScheme(id);
-  if (next.id === scheme.id) return;
+  const same = next.id === scheme.id;
+  if (same && !(next.packId && packState(next.packId) !== 'ready')) return; // 同方案且无需补载
   scheme = next;
   keyEls = buildKeyboard($('kb'));
   const s = store.getSettings();
@@ -98,12 +116,10 @@ function applyScheme(id) {
   const sel = $('setScheme');
   if (sel) sel.value = scheme.id;
   // 练习中切换：立即重算 queue 重新出题（根治旧码残留，§5.4）
-  if (queue.length && idx < queue.length) {
-    toast(`已切换：${scheme.name} · 本轮重新出题`);
-    startSession(mode === 'finaldrill' ? 'chars' : mode);
-  } else {
-    toast(`已切换：${scheme.name}`);
-  }
+  if (!same) toast(queue.length && idx < queue.length ? `已切换：${scheme.name} · 本轮重新出题` : `已切换：${scheme.name}`);
+  await ensurePack(scheme);
+  if (queue.length && idx < queue.length) startSession(mode === 'finaldrill' ? 'chars' : mode);
+  else if (scheme.packId) startSession(mode); // pack 方案：就绪后按新表重新出题
 }
 
 function clearKeys(els = keyEls) {
@@ -181,7 +197,8 @@ function prepareEntry(e) {
   const code = scheme.codeOf(e);
   if (!code) return null;
   const plan = scheme.planOf(code, e);
-  return { word: e.word, py: e.py || '', code, plan };
+  const display = scheme.displayOf ? scheme.displayOf(e) : null; // 注音：码文本显注音符号（§4.2）
+  return { word: e.word, py: e.py || '', code, display: display || code, plan };
 }
 
 function startSession(sourceMode) {
@@ -192,12 +209,23 @@ function startSession(sourceMode) {
   const pool = poolFor(mode);
   $('result').classList.add('hidden');
   if (!pool.length) {
+    const packMissing = scheme.packId && packState(scheme.packId) !== 'ready';
     $('word').textContent = '∅';
     $('hint').textContent = '';
-    $('guide').textContent = mode === 'personal' ? '还没有导入词库 —— 去「导入」页添加你的词库，或换别的模式'
+    $('guide').textContent = packMissing ? `${DATA_PACKS[scheme.packId].name}未就绪 —— 网络就绪后可重试加载`
+      : mode === 'personal' ? '还没有导入词库 —— 去「导入」页添加你的词库，或换别的模式'
       : mode.startsWith('weak:') ? '该键还没有练习数据 —— 先练几轮'
       : mode === 'mistakes' ? '错词本是空的 —— 先去练一轮'
       : '这个模式在当前方案下暂无可练内容 —— 换别的模式试试';
+    if (packMissing) {
+      const btn = document.createElement('button');
+      btn.className = 'btn primary';
+      btn.style.marginTop = '12px';
+      btn.textContent = '重试加载资料包';
+      btn.onclick = async () => { await ensurePack(scheme); startSession(sourceMode); };
+      $('guide').appendChild(document.createElement('br'));
+      $('guide').appendChild(btn);
+    }
     $('inbox').value = '';
     $('inbox').blur();
     $('fb').textContent = '';
@@ -262,7 +290,7 @@ function next() {
   let hint = '';
   if (hintLevel === 'full') {
     if (settings.showPy && it.py) hint += esc(it.py.replace(/\s+/g, ' '));
-    if (settings.showCode) hint += (hint ? ' · ' : '') + `<b>${esc(it.code)}</b>`;
+    if (settings.showCode) hint += (hint ? ' · ' : '') + `<b>${esc(it.display)}</b>`;
   }
   $('hint').innerHTML = hint;
   $('fb').textContent = '';
@@ -448,11 +476,12 @@ function onInput() {
     if (pos >= expected.length) {
       doneWords++;
       if (mode === 'finaldrill' && drillSeq.length) {
-        // SRS 命中按操练单元维度：双拼=韵母键（plan role='ym'），全拼=音节（plan groups）
+        // SRS 命中按操练单元维度：双拼=韵母键、全拼=音节（plan groups）、注音=符号键（含声调键）
         if (drillUnit === 'syllable') {
           for (const g of (current().plan && current().plan.groups) || []) if (drillSeq.includes(g.syl)) store.srsTouch(scheme.id, g.syl, !wrongInWord);
         } else {
-          for (const k of planKeys) if (k.role === 'ym' && drillSeq.includes(k.key)) store.srsTouch(scheme.id, k.key, !wrongInWord);
+          const touched = [...new Set(planKeys.filter(k => k.role !== 'lead').map(k => k.key))];
+          for (const u of touched) if (drillSeq.includes(u)) store.srsTouch(scheme.id, u, !wrongInWord);
         }
       }
       if (mode === 'sprint') { combo++; $('sCombo').textContent = String(combo); }
@@ -485,7 +514,7 @@ function onInput() {
     if (el) { el.classList.add('errflash'); setTimeout(() => el.classList.remove('errflash'), 120); }
     const want = planKeys[pos];
     const note = want && want.note ? `（${want.note}）` : '';
-    $('fb').textContent = want ? `第 ${pos + 1} 步应是 ${want.key === ';' ? ';' : want.key.toUpperCase()}${note}` : '';
+    $('fb').textContent = want ? `第 ${pos + 1} 步应是 ${want.label}${note}` : '';
   }
   updateAcc();
 }
@@ -595,8 +624,9 @@ function renderStageKeys(body, st) {
   const specLine = spec.length
     ? `翘舌声母换位见朱砂描边键（${scheme.name}：${spec.map(([k, v]) => `${v}→${k.toUpperCase()}`).join('、')}）。`
     : '全拼的码就是拼音本身，键位即标准键盘。';
+  const intro = st.body || `大字是物理键位，小字是该键在当前方案下承载的韵母。${specLine}`;
   body.innerHTML = `<h3>${scheme.name}键位全景</h3>
-    <p>大字是物理键位，小字是该键在当前方案下承载的韵母。${specLine}
+    <p>${intro}
     点击任意键查看说明。</p>
     <div class="kbmap" id="kbmap"></div>
     <div class="legend">
@@ -630,6 +660,18 @@ function renderStageDrill(body, st) {
     for (const syl of st.items || []) {
       mkBtn(`${syl.toUpperCase()}${due.includes(syl) ? '<b class="due-dot">●</b>' : ''}`, syl);
     }
+  } else if (st.unit === 'symbol') {
+    // 注音符号键分组（声符→介符→韵符→声调键收尾，§4.1）；按钮标签随布局键帽派生
+    for (const g of st.groups || []) {
+      const h = document.createElement('div');
+      h.className = 'drillgroup';
+      h.textContent = g.label;
+      wrap.appendChild(h);
+      for (const k of g.keys) {
+        const lab = scheme.layout.keyLabel(k);
+        mkBtn(`${esc(lab.main)}<small>${esc(lab.sub)}</small>${due.includes(k) ? '<b class="due-dot">●</b>' : ''}`, k);
+      }
+    }
   } else {
     const groups = {};
     for (const [ym, k] of Object.entries(scheme.YM || {})) (groups[k] ||= []).push(ym);
@@ -654,11 +696,12 @@ function startDrill(st, first, seq) {
   const chars = BUILTIN.chars.map(({ w, p }) => ({ word: w, py: p, weight: 1 }));
   const hit = drillUnit === 'syllable'
     ? chars.filter(e => syllablesOf(e.py).some(s => drillSeq.includes(s)))
-    : chars.filter(e => entryTouchesKey(e, drillSeq, 'ym'));
+    : chars.filter(e => entryTouchesKey(e, drillSeq, drillUnit === 'ymKey' ? 'ym' : undefined));
   if (timer) { clearInterval(timer); timer = null; }
   wrongWordsThisSession = new Set();
   const raw = weightedSample(hit, Math.min(SESSION_LEN, hit.length));
   queue = raw.map(prepareEntry).filter(Boolean);
+  if (!queue.length) { location.hash = '#/practice'; startSession('finaldrill'); return; } // 无可练条目（如注音包未就绪）走空池引导
   idx = 0; doneWords = 0; startTime = 0; correctKeys = 0; wrongKeys = 0;
   $('result').classList.add('hidden');
   $('sTime').textContent = '0:00'; $('sDone').textContent = `0/${queue.length}`;
@@ -1009,4 +1052,7 @@ if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catc
 buildConfusButtons();
 renderStreak();
 route();
-startSession('chars');
+(async () => {
+  await ensurePack(scheme); // 带包方案（注音）：先走激活状态流再出题
+  startSession('chars');
+})();

@@ -5,6 +5,8 @@
 // - makeScheme 是音码（双拼族）实现工厂；全拼另走恒等派生。形码（字表查询）后续票接入。
 // 键位表译自 iDvel/rime-ice 与 rime-double-pinyin 官方 schema algebra 段（ADR-0005），自写表。
 import { normalizeSyllable, splitSyllable, splitPinyin, YM as FLYPY_YM, SM_KEYS as FLYPY_SM, SM_NAME as FLYPY_SMN } from './flypy.js';
+import { ZY_ROWS, ZY_EXTRA_KEYS, ZM_OF_KEY, TONE_MARKS, toZhuyin, keysOfToned, planOfToned } from './zhuyin.js';
+import { bindPack } from './packs.js';
 
 const ROWS3 = ['qwertyuiop', 'asdfghjkl', 'zxcvbnm'];
 const ID = { i: 'i', u: 'u', v: 'v' };
@@ -162,6 +164,75 @@ function makeQuanpin() {
   };
 }
 
+// ---- 注音：py 派生（声明带调数据依赖，SPEC-0003 §2）----
+// 带调拼音来自 zhuyin-tones pack（activate() 懒加载，表落 scheme.table，按词查带调音节）；
+// 码 = 拼音→注音派生键序（符号键 + 声调键收尾，第一声键 = 空格 ' '）。大千 41 键布局，
+// 键帽主显注音符号、角标物理键（T4-Q5）。
+function makeZhuyin() {
+  const tonedSylsOf = (entry) => {
+    const toned = entry && entry.word && scheme.table ? scheme.table[entry.word] : null;
+    return toned ? String(toned).split(' ') : null;
+  };
+  const codeOf = (entry) => {
+    const syls = tonedSylsOf(entry);
+    if (!syls) return null; // 表未就绪或缺字 → 不可出题，引擎过滤（§3.1）
+    let code = '';
+    for (const s of syls) {
+      const ks = keysOfToned(s);
+      if (!ks) return null;
+      code += ks;
+    }
+    return code || null;
+  };
+  const planOf = (code, entry) => {
+    const keys = [];
+    const groups = [];
+    const syls = tonedSylsOf(entry);
+    if (syls) {
+      for (const s of syls) {
+        const ks = planOfToned(s);
+        if (!ks) return { keys: [], groups: [] };
+        groups.push({ syl: s, start: keys.length, len: ks.length });
+        keys.push(...ks);
+      }
+    } else {
+      for (const ch of String(code || '')) keys.push({ key: ch, label: keyLabel(ch).main, note: '', role: '码键' });
+    }
+    return { keys, groups };
+  };
+  // 提示文案码文本：注音符号串 + 调号（含第一声 ˉ，无声调不出字）
+  const displayOf = (entry) => {
+    const syls = tonedSylsOf(entry);
+    if (!syls) return null;
+    const parts = [];
+    for (const s of syls) {
+      const z = toZhuyin(s);
+      if (!z) return null;
+      parts.push(z.zm + TONE_MARKS[z.tone]);
+    }
+    return parts.join(' ');
+  };
+  const keyLabel = (ch) => {
+    if (ch === ' ') return { main: 'ˉ', sub: '空格', title: '声调一（ˉ）· 空格键' };
+    const zm = ZM_OF_KEY[ch];
+    return zm
+      ? { main: zm, sub: ch, title: `${zm} · 键 ${ch.toUpperCase()}` }
+      : { main: ch.toUpperCase(), sub: '', title: `键 ${ch.toUpperCase()}` };
+  };
+  const layout = {
+    ROWS: ZY_ROWS, extraKeys: ZY_EXTRA_KEYS,
+    keyLabel,
+    specialOf: () => '',
+  };
+  const scheme = {
+    id: 'zhuyin', name: '注音', paradigm: 'phonetic',
+    codeOf, planOf, displayOf, layout,
+    activate: () => Promise.resolve(),
+    YM: {}, SM_KEYS: {}, SM_NAME: {},
+  };
+  return bindPack(scheme, 'zhuyin');
+}
+
 export const SCHEMES = {
   flypy: makeScheme({
     id: 'flypy', name: '小鹤双拼', zero: 'first', zeroDouble: true, jqxyV: true,
@@ -204,6 +275,7 @@ export const SCHEMES = {
       ei: 'z', ie: 'x', ui: 'v', ou: 'b', in: 'n', un: 'p' },
   }),
   quanpin: makeQuanpin(),
+  zhuyin: makeZhuyin(),
 };
 
 export const DEFAULT_SCHEME = 'flypy'; // 小鹤仍是旗舰与默认（map-Q3a）

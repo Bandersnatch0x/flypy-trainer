@@ -296,6 +296,16 @@ h2 { font-size: 1.12rem; font-weight: 600; margin: 28px 0 12px; color: var(--bon
 }
 .key.errflash .sm, .key.errflash .ym { color: #fff !important; }
 
+/* ---- 注音大千 41 键布局（v3 #4，T4-Q5）：弹性键宽 + 空格声调宽键 ---- */
+.kb.wide { max-width: 660px; width: 100%; }
+.kb.wide .kbrow { width: 100%; }
+.kb.wide .key { width: auto; flex: 1 1 0; min-width: 30px; height: 46px; }
+.kb.wide .key .sm { font-size: 15px; }
+.kb.wide .key .ym { max-width: none; }
+.kb .key[data-key=" "] { flex: 7 1 0; max-width: 320px; }
+.drillgroup { width: 100%; margin-top: 10px; color: var(--ash); font-size: 0.85rem; }
+.drillgroup:first-child { margin-top: 0; }
+
 /* 舞台击键反冲震荡 */
 .stage.recoil {
   animation: stageRecoil 0.08s ease-out;
