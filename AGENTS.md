@@ -17,3 +17,7 @@ Single-context: root `CONTEXT.md` + `docs/adr/`. See `docs/agents/domain.md`.
 ### Dev workflow
 
 Every task enters the pipeline at a stage picked from `docs/agents/dev-workflow.md`; stage 7 acceptance is mandatory per delivery.
+
+### Release
+
+Ship a version / push to remote: four-piece version bump, gates, name-boundary scan. See `docs/agents/release.md`.
