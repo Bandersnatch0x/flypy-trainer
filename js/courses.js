@@ -17,7 +17,8 @@
 //     //                 ymKey=韵母键（按钮自方案 layout+YM 派生，省略 items）；
 //     //                 syllable=音节（items=高频音节清单，拼音串；SRS 单元即音节，维度不变）；
 //     //                 symbol=符号键（注音：groups 分组清单 声符→介符→韵符→声调键，SRS 单元=键，含声调键〔规格推断〕5；
-//     //                 粤拼：声母→韵母→六调键收尾，SRS 单元=字母键+调键 v/x/q，SPEC-0004 §7 推断 3）；
+//     //                 粤拼：声母→韵母→六调键收尾，SRS 单元=字母键+调键 v/x/q，SPEC-0004 §7 推断 3；
+//     //                 五笔画：五笔画键一组，题型「笔画（或例字首笔）→ 在哪键」，全站最轻操练，SPEC-0004 §3.3）；
 //     //                 letter=仓颉字母键（形码 #5：groups=四类分组；SRS 单元=24 字母，X 不教 Z 非取码；
 //     //                 roots 供「字根 X 在哪键」一键题=字根本字；出字题打首码起的全码）
 //     // kind='practice' 池取题练习：{pools:['chars'|'words2'|'words34'|'sentences'], seq?:'len'}，多池合并；
@@ -46,6 +47,7 @@ import { ZY_GROUPS } from './zhuyin.js';
 import { JP_SM_KEYS, JP_YM_KEYS, JP_TONE_KEY_LIST } from './jyutping.js';
 import { CJ_CATS, CJ_LETTERS } from './cangjie.js';
 import { WB_ZONES, WB_ROOTS } from './wubi.js';
+import { SK_KEYS } from './schemes.js';
 
 // ---- 双拼族（五变体共用骨架）----
 const SP_CONFUS = [
@@ -258,6 +260,46 @@ const QUICK_COURSE = {
   stages: quickStages, confus: CJ_CONFUS, challenge: CJ_CHALLENGE('短码单字', '词组热身'),
 };
 
+// ---- 五笔画（形码入门：五键认知 + 笔顺教学，SPEC-0004 §3.3，issue #11）----
+// 定位：五键、零记忆、以笔顺为教学内容——与五笔 86 是难度阶梯而非竞品（§3.4）。
+// 无词阶：官方码表无词码（max_phrase_length:1）→ 阶 3 练高码长字节奏，文案直陈「词=逐字连打」。
+// confus：底本差字（方/火/必 一类，人工抽检标注底本）+ 形近字对（土/士、己/已：码同不可辨，辨在字形）。
+// 码长分布事实（截包实测）：截集 1–29 笔，峰 10 笔上下（8–12 笔最密）；全码表 1–84 笔。
+const STROKE_COURSE = {
+  scheme: 'stroke', challengeSub: '每天一个小目标，七天练顺五笔画',
+  stages: [
+    { kind: 'keys', view: 'map', name: '五键认知', sub: '五键 h s p n z · 归类规则一图讲透',
+      body: '五笔画的码 = 按书写笔顺逐笔按键，只有五个键：横 H、竖 S、撇 P、捺 N、折 Z。三条归类规则务必记牢：<b>提归横</b>——提笔按 H（如「打」的第三笔）；<b>点归捺</b>——点笔按 N；<b>带转折的笔画一律归折</b>——竖钩、横折钩、斜钩、卧钩都按 Z（如「小」的第一笔竖钩）。键帽大字是字母键，角标是康熙笔画字形 ⼀⼁⼃⼂⼄；其余 21 键不使用。点击任意键查看说明。' },
+    { kind: 'drill', unit: 'symbol', groups: [
+        { label: `五笔画键 · ${SK_KEYS.length} 键一组`, keys: SK_KEYS },
+      ],
+      name: '五键操练', sub: '全站最轻操练 · 见笔知键（间隔重复）',
+      body: '题型只有一种：笔画（或例字首笔）→ 在哪键。点 → N，提 → H，带转折 → Z。五键一组，是全站最轻的操练。带 <b class="due-dot">●</b> 的键是到期待复习键（间隔重复调度）。' },
+    { kind: 'practice', pools: ['chars'], seq: 'len', name: '笔顺操练', sub: '先少笔后多笔 · 全提示即笔顺教学',
+      body: '从内置高频字池逐字出题，轮内按码长升序——先少笔字后多笔字。plan 逐笔展开、每一步的提示就是笔画名：开「全提示」练的就是笔顺本身。码长分布：截集常用字 1–29 笔（全码表 1–84 笔），峰在 10 笔上下（8–12 笔最密）。注意：笔顺底本与大陆通行笔顺在少数字（如 方/火/必）存在微差，教学从底本（见「数据来源与许可」页）。' },
+    { kind: 'practice', pools: ['chars'], name: '长字节奏', sub: '无词阶 · 词 = 逐字连打',
+      body: '五笔画没有词码——<b>词 = 逐字连打</b>：打完一个字的笔画，接着打下一个。本阶练高码长字的节奏与耐力：魔 21 笔、翻 18 笔、嘴 16 笔（截集实测）。想练词组可切拼音系方案。' },
+    { kind: 'mistakes', name: '易错强化', sub: '从你的错词本取题',
+      body: '错词本现有 {n} 条。答错的词会自动进错词本（上限 200 条），这里专门重练它们。' },
+  ],
+  confus: [
+    { label: '方 · 底本有差', note: '底本笔顺 nhzp（点、横、折、撇，从底本序）；此字笔顺与大陆通行规范有微差，人工抽检在案', role: 'root', keys: ['n', 'h', 'z', 'p'] },
+    { label: '火 · 底本有差', note: '底本笔顺 nppn（点、撇、撇、捺，从底本序）；底本有差字一类，人工抽检在案', role: 'root', keys: ['n', 'p'] },
+    { label: '必 · 底本有差', note: '底本取 nznnp；上游同字另收异序 nznpn——底本差异实例，人工抽检在案', role: 'root', keys: ['n', 'z', 'p'] },
+    { label: '土/士 · 形近同码', note: '土、士码皆 hsh：笔形笔序全同，码不可辨，辨在字形（上横长/下横长）', role: 'root', keys: ['h', 's'] },
+    { label: '己/已 · 形近同码', note: '己、已码皆 zhz：己开口、已半开，笔顺全同，辨在字形', role: 'root', keys: ['h', 'z'] },
+  ],
+  challenge: [
+    { tag: 'D1', label: '任意一轮热身', match: { any: true } },
+    { tag: 'D2', label: '五键操练一轮', match: { stage: 1 } },
+    { tag: 'D3', label: '笔顺操练一轮', match: { stage: 2 } },
+    { tag: 'D4', label: '长字节奏一轮', match: { stage: 3 } },
+    { tag: 'D5', label: '底本/形近对抗一轮', match: { prefix: 'confus' } },
+    { tag: 'D6', label: '限时冲刺一轮', match: { modes: ['sprint'] } },
+    { tag: 'D7', label: '混合综合一轮', match: { modes: ['mixed'] } },
+  ],
+};
+
 // ---- 五笔 86（降级形态，§2/§4.1 五笔列，issue #6）----
 // 课程视图内只有一阶：字根总表（25 键 × 键上字根，五区分组）+ 自由练习直达（仅单字出题）。
 // 形态边界显式空态：无 SRS 操练阶、不入七日挑战（noChallenge → 挑战卡空态）、无易混对供给；
@@ -284,6 +326,7 @@ export const COURSES = {
   jyutping: JYUTPING_COURSE,
   cangjie: CANGJIE_COURSE,
   quick: QUICK_COURSE,
+  stroke: STROKE_COURSE,
   wubi86: WUBI_COURSE,
 };
 export function courseOf(schemeId) { return COURSES[schemeId] || COURSES.flypy; }
