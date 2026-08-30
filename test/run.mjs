@@ -313,8 +313,8 @@ const zhuyPack = readPack('zhuyin-tones.v1.json');
 const jyutPack = readPack('jyutping-tones.v1.json');
 const strokePack = readPack('stroke.v1.json');
 const entriesOf = (p) => Object.keys(p).filter(k => !k.startsWith('_'));
-eq('packs 目录恰有五份版本化 JSON', fs.readdirSync(packDir).filter(f => f.endsWith('.json')).sort(),
-  ['cangjie5.v1.json', 'jyutping-tones.v1.json', 'stroke.v1.json', 'wubi86.v1.json', 'zhuyin-tones.v1.json']);
+eq('packs 目录恰有六份版本化 JSON', fs.readdirSync(packDir).filter(f => f.endsWith('.json')).sort(),
+  ['cangjie5.v1.json', 'jyutping-tones.v1.json', 'stroke.v1.json', 'wubi86-course.v1.json', 'wubi86.v1.json', 'zhuyin-tones.v1.json']);
 for (const [name, p] of [['wubi86', wubiPack], ['cangjie5', cangPack], ['zhuyin-tones', zhuyPack], ['stroke', strokePack]]) {
   eq(`${name} _meta 出处`, typeof p._meta.source === 'string' && p._meta.source.length > 0, true);
   eq(`${name} _meta 许可`, p._meta.license, 'LGPL-3.0');
