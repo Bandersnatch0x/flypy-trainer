@@ -11,12 +11,12 @@ export const FLAGSHIP_ID = 'flypy'; // 旗舰·默认：顶层独享全宽大卡
 
 // 三层分组（§5.1）：旗舰小鹤顶层 + 音码组/形码组各带一行科普。
 // 组内次序 = 音码：自然码/微软/搜狗/智能ABC（双拼子标签）→ 全拼 → 注音 → 粤拼（#10 追加末位，一期次序不动）；
-// 形码：仓颉 → 速成 → 五笔 86。
+// 形码：五笔画（首位，形码入门叙事，#11）→ 仓颉 → 速成 → 五笔 86。
 export const GROUPS = [
   { id: 'phonetic', title: '音码', blurb: '音码 · 码即读音（全拼、五种双拼、注音、粤拼）',
     ids: ['ziranma', 'mspy', 'sogou', 'abc', 'quanpin', 'zhuyin', 'jyutping'] },
-  { id: 'shape', title: '形码', blurb: '形码 · 码即字形（仓颉、速成、五笔）',
-    ids: ['cangjie', 'quick', 'wubi86'] },
+  { id: 'shape', title: '形码', blurb: '形码 · 码即字形（五笔画、仓颉、速成、五笔）',
+    ids: ['stroke', 'cangjie', 'quick', 'wubi86'] },
 ];
 
 // 卡片五层信息之一②：一句话特点（自然码/注音文案出自 T4 简报，§5.1）
@@ -31,6 +31,7 @@ export const CARD_FEATURES = {
   jyutping: '六声调辨义 · 阴调单键、阳调同键双敲',
   cangjie: '字形拆成字母序列，熟字根即识码；速成取其首尾二码',
   quick: '速成 = 仓颉首尾二码，节奏更快',
+  stroke: '五键打字 · 形码第一步',
   wubi86: '字根查表出码，先认字根再自由练习',
 };
 
@@ -65,6 +66,14 @@ export function progressSummary(id) {
 
 // 科普 details 块（§5.1 末段 / T5-D7）：按当前方案数据驱动，范式科普不做弹窗
 export function schemeHelpOf(scheme) {
+  if (scheme.id === 'stroke') {
+    return {
+      summary: '什么是五笔画？',
+      body: `<p>五笔画（笔画输入）只用五个键：<b>横 H、竖 S、撇 P、捺 N、折 Z</b>。每个字的码 = 按书写笔顺逐笔按键，会写字就会打。</p>
+        <p>三条归类规则：<b>点归捺、提归横、带转折的笔画一律归折</b>。没有音节、没有词码——打词就是逐字连打。</p>
+        <p>零记忆、零门槛，是形码的第一步：先建立笔顺感与键位感，再进阶仓颉或五笔 86。</p>`,
+    };
+  }
   if (scheme.paradigm === 'shape') {
     return {
       summary: `什么是${scheme.name}？什么是形码？`,
