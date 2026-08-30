@@ -349,6 +349,67 @@ await page.goto(BASE + '/#/settings', { waitUntil: 'networkidle' });
 await page.selectOption('#setScheme', 'flypy');
 await page.waitForTimeout(200);
 
+// 18. v3 #6：五笔 86 降级形态 —— 单字查表 / 字根总表页 / 自由练习 / 提示兜底
+await page.goto(BASE + '/#/settings', { waitUntil: 'networkidle' });
+await page.selectOption('#setScheme', 'wubi86');
+await page.waitForTimeout(900); // 激活状态流：正在准备五笔 86 字码表（~82KB）→ 就绪
+await page.goto(BASE + '/#/practice', { waitUntil: 'networkidle' });
+await page.click('input[name="hint"][value="full"]');
+await page.click('#modes button[data-mode="chars"]'); // 自由练习 = 单字取题（前序模式五笔可能不供给）
+await page.waitForTimeout(200);
+check('五笔取题为单字', await page.locator('#word').innerText().then(t => [...t].length === 1 && t !== '∅'));
+const wbHintB = await page.locator('#hint b').innerText().catch(async () => {
+  console.log('DBG 五笔面板状态 word=' + JSON.stringify(await page.locator('#word').innerText())
+    + ' hint=' + JSON.stringify(await page.locator('#hint').innerHTML())
+    + ' guide=' + JSON.stringify((await page.locator('#guide').innerText()).slice(0, 120))
+    + ' toast=' + JSON.stringify(await page.locator('#toast').innerText())
+    + ' settings=' + await page.evaluate(() => localStorage.getItem('flypy.v1.settings')));
+  return null;
+});
+check('五笔单字查表码（1–4 键）', !!wbHintB && /^[a-y]{1,4}$/.test(wbHintB));
+check('五笔引导为步骤话术', await page.locator('#guide').innerText().then(t => t.includes('第 1 步')));
+check('五笔 full 档展开该键字根候选表（§4.2 兜底）', await page.locator('#guide').innerText().then(t => t.includes('此键字根')));
+check('五笔键帽角标字根（G=王一）', await page.locator('#kb .key[data-key="g"] .ym').innerText().then(t => t.includes('王')));
+check('五笔 Z 学习键描边单列', await page.locator('#kb .key[data-key="z"].special').count().then(n => n === 1));
+const wbWord = await page.locator('#word').innerText();
+const wbCode = await page.evaluate(async (w) => {
+  const m = await import('/js/schemes.js');
+  return m.getScheme('wubi86').codeOf({ word: w });
+}, wbWord);
+check('五笔码与码文本一致', wbCode === wbHintB);
+for (const ch of wbCode) await page.locator('#inbox').press(ch);
+await page.waitForTimeout(250);
+check('五笔整码输入推进', await page.locator('#sDone').innerText().then(t => t.startsWith('1/')));
+check('五笔多字词不取题（§3.4）', await page.evaluate(async () => {
+  const m = await import('/js/schemes.js');
+  return m.getScheme('wubi86').codeOf({ word: '中国', py: 'zhong guo' });
+}).then(c => c === null));
+// 课程视图：字根总表页（无五阶/无 SRS/不入七日挑战，空态显式）
+await page.goto(BASE + '/#/course', { waitUntil: 'networkidle' });
+check('五笔无七日挑战卡', await page.locator('#stages li.challenge').count().then(n => n === 0));
+check('五笔课程视图 = 字根总表页', await page.locator('#stages li').first().innerText().then(t => t.includes('字根总表')));
+check('五笔形态边界空态显式', await page.locator('#stageBody').innerText().then(t => t.includes('无五阶课程') && t.includes('不入七日挑战')));
+check('五笔字根总表五区分组', await page.locator('#rootcats .rootcat').count().then(n => n === 5));
+check('五笔字根总表 25 键位', await page.locator('#rootcats .rootchip').count().then(n => n === 25));
+check('五笔键盘图 26 键', await page.locator('#kbmap .key').count().then(n => n === 26));
+await page.locator('#rootcats .rootchip').first().click();
+await page.waitForTimeout(150);
+check('五点键看键上字根与例字', await page.locator('#rootdetail').innerText().then(t => t.includes('键上字根') && t.includes('例字')));
+// 自由练习直达：回练习页单字出题
+await page.click('#goFree');
+await page.waitForTimeout(250);
+check('自由练习回到练习页', await page.evaluate(() => location.hash), '#/practice');
+check('自由练习取题仍为单字', await page.locator('#word').innerText().then(t => [...t].length === 1 && t !== '∅'));
+// 多字词模式：池被 codeOf 全滤 → 显式空态（不出假会话）
+await page.click('#modes button[data-mode="words2"]');
+await page.waitForTimeout(200);
+check('五笔多字词模式显式空态（仅取单字）', await page.locator('#guide').innerText().then(t => t.includes('仅取单字')));
+check('五笔空态不产生会话进度', await page.locator('#sDone').innerText().then(t => t === '0/0'));
+// 切回小鹤收尾
+await page.goto(BASE + '/#/settings', { waitUntil: 'networkidle' });
+await page.selectOption('#setScheme', 'flypy');
+await page.waitForTimeout(200);
+
 await browser.close();
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
