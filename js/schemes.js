@@ -7,6 +7,7 @@
 import { normalizeSyllable, splitSyllable, splitPinyin, YM as FLYPY_YM, SM_KEYS as FLYPY_SM, SM_NAME as FLYPY_SMN } from './flypy.js';
 import { ZY_ROWS, ZY_EXTRA_KEYS, ZM_OF_KEY, TONE_MARKS, toZhuyin, keysOfToned, planOfToned } from './zhuyin.js';
 import { CJ_LETTERS, quickOf } from './cangjie.js';
+import { WB_ROOTS } from './wubi.js';
 import { bindPack } from './packs.js';
 
 const ROWS3 = ['qwertyuiop', 'asdfghjkl', 'zxcvbnm'];
@@ -270,6 +271,41 @@ function makeShapeScheme({ id, name, derive }) {
   return bindPack(scheme, 'cangjie5'); // 速成与仓颉共用同一份字表（零码表，§2）
 }
 
+// ---- 五笔 86（降级形态：字根总表 + 自由练习，SPEC-0003 §2/§4，issue #6）----
+// 码 = 单字查 wubi86 包（rime-wubi LGPL，GB2312 6,763 常用字）；多字词/缺码字 → null 被过滤（§3.4）。
+// 无拆解数据：plan role='码键'，full 档提示 = 全码键序 + 高亮当前键 + 该键字根候选表
+// （rootHint 与字根总表页同源取数，§4.2 兜底形态）。无课程阶、无 SRS 操练、不入七日挑战（T3-D4）。
+function makeWubi86() {
+  const scheme = { id: 'wubi86', name: '五笔 86', paradigm: 'shape' };
+  const codeOf = (entry) => {
+    const word = entry && entry.word;
+    if (!word || [...word].length !== 1) return null; // 取题仅单字（§3.4）
+    return (scheme.table && scheme.table[word]) || null; // 表未就绪/缺码字 → 不可出题
+  };
+  const planOf = (code) => ({
+    keys: [...String(code || '')].map((ch) => ({ key: ch, label: ch.toUpperCase(), note: '', role: '码键' })),
+    groups: [],
+  });
+  const keyLabel = (ch) => {
+    const R = WB_ROOTS[ch];
+    if (R) return { main: ch.toUpperCase(), sub: R.tag, title: `五笔 86 · ${R.zone}区${R.pos}位 · 键上字根：${R.roots}` };
+    return ch === 'z'
+      ? { main: 'Z', sub: '学习', title: 'Z 学习键 · 不参与取码' }
+      : { main: ch.toUpperCase(), sub: '', title: `键 ${ch.toUpperCase()}` };
+  };
+  scheme.codeOf = codeOf;
+  scheme.planOf = planOf;
+  scheme.layout = {
+    ROWS: ROWS3, extraKeys: [], keyLabel,
+    specialOf: (ch) => (ch === 'z' ? '学习' : ''), // Z 学习键描边单列，正码无一含 z
+  };
+  // full 档字根候选表（§4.2）：与字根总表页共用 WB_ROOTS 一份数据
+  scheme.rootHint = (ch) => (WB_ROOTS[ch] ? `此键字根：${WB_ROOTS[ch].roots}` : '');
+  scheme.activate = () => Promise.resolve(); // bindPack 覆写为 pack 装载
+  scheme.YM = {}; scheme.SM_KEYS = {}; scheme.SM_NAME = {};
+  return bindPack(scheme, 'wubi86');
+}
+
 export const SCHEMES = {
   flypy: makeScheme({
     id: 'flypy', name: '小鹤双拼', zero: 'first', zeroDouble: true, jqxyV: true,
@@ -315,6 +351,7 @@ export const SCHEMES = {
   zhuyin: makeZhuyin(),
   cangjie: makeShapeScheme({ id: 'cangjie', name: '仓颉', derive: (full) => full }), // 深教样板（T3-D1/D2）
   quick: makeShapeScheme({ id: 'quick', name: '速成', derive: quickOf }), // 官方变体：首尾二码，复用全五阶（T3-D4）
+  wubi86: makeWubi86(), // 降级形态：字根总表 + 自由练习（T3-D4，issue #6）
 };
 
 export const DEFAULT_SCHEME = 'flypy'; // 小鹤仍是旗舰与默认（map-Q3a）

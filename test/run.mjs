@@ -24,15 +24,15 @@ function eq(name, got, want) {
 
 const fly = SCHEMES.flypy, mspy = SCHEMES.mspy, sogou = SCHEMES.sogou, abc = SCHEMES.abc,
   zrm = SCHEMES.ziranma, qp = SCHEMES.quanpin, zy = SCHEMES.zhuyin,
-  cj = SCHEMES.cangjie, qk = SCHEMES.quick;
+  cj = SCHEMES.cangjie, qk = SCHEMES.quick, wb = SCHEMES.wubi86;
 const code = (scheme, py) => scheme.codeOf({ word: '测', py });
 
 // ---- 1. 方案接口完整性（§3.1）----
 eq('默认方案仍为小鹤', DEFAULT_SCHEME, 'flypy');
-eq('注册表 9 方案', SCHEME_LIST.length, 9);
+eq('注册表 10 方案（+五笔 86 降级形态，#6）', SCHEME_LIST.length, 10);
 for (const s of Object.values(SCHEMES)) {
   eq(`${s.id} 接口七件齐`, ['id', 'name', 'paradigm', 'codeOf', 'planOf', 'layout', 'activate'].every(k => s[k] !== undefined), true);
-  eq(`${s.id} paradigm 随范式`, s.paradigm, s.id === 'cangjie' || s.id === 'quick' ? 'shape' : 'phonetic');
+  eq(`${s.id} paradigm 随范式`, s.paradigm, ['cangjie', 'quick', 'wubi86'].includes(s.id) ? 'shape' : 'phonetic');
   eq(`${s.id} layout.ROWS 存在`, Array.isArray(s.layout.ROWS), true);
   eq(`${s.id} keyLabel 函数`, typeof s.layout.keyLabel, 'function');
   eq(`${s.id} specialOf 函数`, typeof s.layout.specialOf, 'function');
@@ -40,6 +40,8 @@ for (const s of Object.values(SCHEMES)) {
     eq('zhuyin activate 挂 zhuyin-tones 包（带调数据依赖，§2）', s.packId, 'zhuyin');
   } else if (s.id === 'cangjie' || s.id === 'quick') {
     eq(`${s.id} activate 挂 cangjie5 包（字表查询，§2）`, s.packId, 'cangjie5');
+  } else if (s.id === 'wubi86') {
+    eq('wubi86 activate 挂 wubi86 包（字表查询，§2）', s.packId, 'wubi86');
   } else {
     eq(`${s.id} activate 立即就绪`, await s.activate(), undefined);
   }
@@ -395,8 +397,9 @@ eq('prefetch 拒绝未知包', (await prefetchPacks(['nope'])).ok, false);
 const { COURSES, courseOf, syllablesOf, confusKeys, confusEndsMatch, stageModes, challengeMatch } = await import('../js/courses.js');
 
 // -- schema 完整性：每方案一份、恰五阶、形状固定（供 #4/#5 依样产出）--
-eq('注册表六方案皆有课程数据', Object.keys(SCHEMES).every(id => COURSES[id] && COURSES[id].scheme === id), true);
+eq('注册表十方案皆有课程数据', Object.keys(SCHEMES).every(id => COURSES[id] && COURSES[id].scheme === id), true);
 for (const c of Object.values(COURSES)) {
+  if (c.form === 'rootTable') continue; // 降级形态（五笔 86）形状另断，见 #6 专节
   eq(`${c.scheme} 恰五阶`, c.stages.length, 5);
   eq(`${c.scheme} 阶 kind 合法`, c.stages.every(s => ['keys', 'drill', 'practice', 'mistakes'].includes(s.kind)), true);
   eq(`${c.scheme} 阶名/副标题齐`, c.stages.every(s => s.name && s.sub), true);
@@ -643,6 +646,94 @@ eq('速成进度独立于仓颉', store.getCourse('quick'), { stage: 0 });
 eq('内置字池 500 字全部可出仓颉题', POOL.chars.every(({ w }) => !!CJ_TABLE[w]), true);
 eq('内置词池用字全部在表（词组教学示例的事实基础）', [...new Set([...POOL.words2, ...POOL.words34].flatMap(({ w }) => [...w]))].every(ch => !!CJ_TABLE[ch]), true);
 
+// ---- v3 #6：五笔 86 降级形态（SPEC-0003 §2/§4.1–4.2，验收条目 11/15）----
+const wbm = await import('../js/wubi.js');
+const { WB_ROOTS, WB_ZONES } = wbm;
+const WB_TABLE = Object.fromEntries(Object.entries(wubiPack).filter(([k]) => !k.startsWith('_')));
+
+// -- 字根总表：25 键 × 键上字根（五区各五键，Z 不参与取码）--
+eq('字根总表 25 键 = a–y（Z 不入表）', Object.keys(WB_ROOTS).sort().join(''), 'abcdefghijklmnopqrstuvwxy');
+eq('五区 × 五键覆盖 25 码键', WB_ZONES.flatMap(z => z.keys).sort().join(''), 'abcdefghijklmnopqrstuvwxy');
+eq('恰五区、每区五键', [WB_ZONES.length, WB_ZONES.every(z => z.keys.length === 5)], [5, true]);
+eq('每键皆备键名/字根清单/例字', Object.values(WB_ROOTS).every(r => r.name && r.roots && (r.ex || []).length >= 3), true);
+eq('每键皆备区/位/键帽角标（键帽与总表页取数）', Object.values(WB_ROOTS).every(r => r.zone && r.pos >= 1 && r.tag), true);
+// 自写表的事实校验：凡在包内的字根/键名/例字，码首键必为该键
+eq('键名字皆在表内且首码落该键', Object.entries(WB_ROOTS).every(([k, r]) => WB_TABLE[r.name] && WB_TABLE[r.name][0] === k), true);
+eq('键上字根在表内者首码落该键', Object.entries(WB_ROOTS).every(([k, r]) =>
+  r.roots.split(/\s+/).every(g => !WB_TABLE[g] || WB_TABLE[g][0] === k)), true);
+eq('例字皆在表内且首码落该键', Object.entries(WB_ROOTS).every(([k, r]) =>
+  r.ex.every(w => WB_TABLE[w] && WB_TABLE[w][0] === k)), true);
+
+// ---- v3 #6：五笔 86 降级形态（SPEC-0003 §2/§3.4/§4.1/§4.2，验收条目 11/15，issue #6）----
+
+// -- 懒加载接缝：表未就绪不出题 --
+eq('wubi 表未就绪 → 不出题', wb.codeOf({ word: '工' }), null);
+wb.table = WB_TABLE;
+
+// -- 单字查表出码（≥12 用例，全部与 pack 实值核对）--
+const WB_CASES = [
+  ['工', 'a'], ['了', 'b'], ['以', 'c'], ['在', 'd'], ['有', 'e'], ['地', 'f'],
+  ['一', 'g'], ['上', 'h'], ['不', 'i'], ['是', 'j'], ['中', 'k'], ['国', 'l'],
+  ['同', 'm'], ['民', 'n'], ['为', 'o'], ['这', 'p'], ['我', 'q'], ['的', 'r'],
+  ['要', 's'], ['和', 't'],
+];
+for (const [w, c] of WB_CASES) eq(`wubi.codeOf(${w})`, wb.codeOf({ word: w }), c);
+
+// -- 多字词/缺码字 → null 被取题过滤（§3.4）--
+eq('wubi 二字词 → null', wb.codeOf({ word: '中国', py: 'zhong guo' }), null);
+eq('wubi 三字词 → null', wb.codeOf({ word: '王彬宇' }), null);
+eq('wubi 整句 → null', wb.codeOf({ word: '中华人民共和国' }), null);
+eq('wubi 缺码字 → null（表外字过滤）', wb.codeOf({ word: '龘' }), null);
+eq('wubi 空条目 → null', wb.codeOf({}), null);
+eq('wubi 形码只按 word 查表（§3.3）', wb.codeOf({ word: '工', py: '', srcCode: 'zzz', srcScheme: 'flypy' }), 'a');
+
+// -- plan：role='码键' 扁平键序（§4.2 兜底形态）--
+const pJian = wb.planOf('qvfp', { word: '键' });
+eq('wubi plan 扁平键序', pJian.keys.map(k => k.key), ['q', 'v', 'f', 'p']);
+eq('wubi plan role=码键', pJian.keys.every(k => k.role === '码键'), true);
+eq('wubi plan label=键名（第 n 步话术料）', pJian.keys.map(k => k.label), ['Q', 'V', 'F', 'P']);
+eq('wubi plan groups 空', pJian.groups, []);
+
+// -- 布局：25 键角标字根 + Z 学习键单列 --
+eq('wubi 键帽主显字母/角标字根略', wb.layout.keyLabel('g'),
+  { main: 'G', sub: '王 一', title: `五笔 86 · 横区1位 · 键上字根：${WB_ROOTS.g.roots}` });
+eq('wubi Z 学习键角标与描边', [wb.layout.keyLabel('z').sub, wb.layout.specialOf('z')], ['学习', '学习']);
+eq('wubi 取码键不描边', wb.layout.specialOf('g'), '');
+eq('wubi 26 键位无附键', wb.layout.ROWS.join('').length + wb.layout.extraKeys.length, 26);
+
+// -- 字根总表数据（事实层自写表，ADR-0005）--
+eq('字根总表恰 25 取码键（无 Z）', Object.keys(WB_ROOTS).sort().join(''), 'abcdefghijklmnopqrstuvwxy');
+eq('五区各 5 键', WB_ZONES.map(z => z.keys.length), [5, 5, 5, 5, 5]);
+eq('五区覆盖 25 键无重复', WB_ZONES.flatMap(z => z.keys).sort().join(''), Object.keys(WB_ROOTS).sort().join(''));
+eq('每键字根与例字非空', Object.values(WB_ROOTS).every(r => r.roots && r.ex.length >= 2), true);
+eq('例字皆在表内且首码归属该键', Object.entries(WB_ROOTS).every(([k, v]) =>
+  v.ex.every(w => WB_TABLE[w] && WB_TABLE[w][0] === k)), true);
+
+// -- 提示兜底形态（§4.2）：该键字根候选表与总表页同源取数 --
+eq('wubi rootHint 候选表 = 总表数据', wb.rootHint('g'), `此键字根：${WB_ROOTS.g.roots}`);
+eq('wubi rootHint 25 键皆有、Z 无', [...'abcdefghijklmnopqrstuvwxy'].every(k => wb.rootHint(k).startsWith('此键字根：')) && wb.rootHint('z') === '', true);
+eq('仓颉无 rootHint（走字根名引导，非兜底形态）', cj.rootHint, undefined);
+
+// -- 课程形态边界（验收条目 11：无课程阶/无 SRS 操练/不入七日挑战）--
+const wbCourse = courseOf('wubi86');
+eq('wubi 课程形态 = 字根总表页', [wbCourse.form, wbCourse.name, wbCourse.sub], ['rootTable', '字根总表', '25 键 × 键上字根 · 自由练习仅单字']);
+eq('wubi 无课程阶', wbCourse.stages, []);
+eq('wubi 无易混对供给', wbCourse.confus, []);
+eq('wubi 不入七日挑战（谓词空态）', [wbCourse.challenge, wbCourse.challengeSub], [[], '']);
+eq('wubi 页面数据挂字根总表（渲染器读课程数据）', [wbCourse.zones === WB_ZONES, wbCourse.roots === WB_ROOTS], [true, true]);
+eq('courseOf 五笔不回落小鹤', courseOf('wubi86').scheme, 'wubi86');
+eq('wubi 课程进度读默认空态', store.getCourse('wubi86'), { stage: 0 });
+
+// -- 取题仅单字：内置池语义（出题过滤在引擎 codeOf 层）--
+eq('内置二字词池在五笔下全被过滤', POOL.words2.filter(({ w }) => wb.codeOf({ word: w })).length, 0);
+eq('内置高频字池 500 字全部可出五笔题', POOL.chars.every(({ w }) => !!WB_TABLE[w]), true);
+
+// -- 命名边界：站内文案零商标性字样（通称「五笔 86」；署名面在 licenses 页，豁免）--
+const jsFiles = fs.readdirSync(new URL('../js/', import.meta.url)).filter(f => f.endsWith('.js')).map(f => 'js/' + f);
+const scanned = ['index.html', ...jsFiles].map(f => fs.readFileSync(new URL('../' + f, import.meta.url), 'utf8')).join('\n');
+eq('命名边界：站内零「五笔字型/王码」', /五笔字型|王码/.test(scanned), false);
+eq('命名边界：方案名即通称', [wb.id, wb.name, SCHEME_LIST.find(s => s.id === 'wubi86').name], ['wubi86', '五笔 86', '五笔 86']);
+
 // -- sw.js 单测（桩环境：classic worker 脚本按模块导入，globals 先就位）--
 const swHandlers = {};
 globalThis.self = {
@@ -676,9 +767,9 @@ let installP = null;
 await runHandler('install', { waitUntil: (p) => { installP = p; } });
 await installP;
 const cacheName = (await globalThis.caches.keys())[0];
-eq('SW CACHE 串随版本 bump', cacheName, 'helian-v0.0.3-dev5');
+eq('SW CACHE 串随版本 bump', cacheName, 'helian-v0.0.3-dev6');
 const shellKeys = [...cacheStores.get(cacheName).keys()];
-eq('packs.js / licenses.html / courses.js / zhuyin.js / cangjie.js 入 SHELL', ['/js/packs.js', '/licenses.html', '/js/courses.js', '/js/zhuyin.js', '/js/cangjie.js'].every(u => shellKeys.includes(u)), true);
+eq('packs.js / licenses.html / courses.js / zhuyin.js / cangjie.js / wubi.js 入 SHELL', ['/js/packs.js', '/licenses.html', '/js/courses.js', '/js/zhuyin.js', '/js/cangjie.js', '/js/wubi.js'].every(u => shellKeys.includes(u)), true);
 eq('pack 不进 SHELL（防 addAll 原子失败）', shellKeys.some(u => u.startsWith('/data/packs/')), false);
 
 const packUrlFull = 'http://localhost:4173/data/packs/cangjie5.v1.json';

@@ -211,41 +211,46 @@ function startSession(sourceMode) {
   wrongWordsThisSession = new Set();
   const pool = poolFor(mode);
   $('result').classList.add('hidden');
-  if (!pool.length) {
-    const packMissing = scheme.packId && packState(scheme.packId) !== 'ready';
-    $('word').textContent = '∅';
-    $('hint').textContent = '';
-    $('guide').textContent = packMissing ? `${DATA_PACKS[scheme.packId].name}未就绪 —— 网络就绪后可重试加载`
-      : mode === 'personal' ? '还没有导入词库 —— 去「导入」页添加你的词库，或换别的模式'
-      : mode.startsWith('weak:') ? '该键还没有练习数据 —— 先练几轮'
-      : mode === 'mistakes' ? '错词本是空的 —— 先去练一轮'
-      : '这个模式在当前方案下暂无可练内容 —— 换别的模式试试';
-    if (packMissing) {
-      const btn = document.createElement('button');
-      btn.className = 'btn primary';
-      btn.style.marginTop = '12px';
-      btn.textContent = '重试加载资料包';
-      btn.onclick = async () => { await ensurePack(scheme); startSession(sourceMode); };
-      $('guide').appendChild(document.createElement('br'));
-      $('guide').appendChild(btn);
-    }
-    $('inbox').value = '';
-    $('inbox').blur();
-    $('fb').textContent = '';
-    $('prog').style.width = '0%';
-    $('sDone').textContent = '0/0';
-    clearKeys();
-    return;
-  }
+  if (!pool.length) { showEmptyBoard(false); return; }
   const n = mode === 'sprint' ? Math.min(300, pool.length) : Math.min(SESSION_LEN, pool.length);
   const raw = weightedSample(pool, n);
   queue = raw.map(prepareEntry).filter(Boolean);
+  if (!queue.length) { showEmptyBoard(true); return; } // 池有条目但全被 codeOf 过滤（如形码多字词）→ 空态，不出假会话
   if (mode.endsWith('@len')) queue.sort((a, b) => a.code.length - b.code.length); // 先简字后满码（#5 阶 2）
   idx = 0; doneWords = 0; startTime = 0; correctKeys = 0; wrongKeys = 0;
   $('sTime').textContent = mode === 'sprint' ? `0:${SPRINT_SECS}` : '0:00';
   $('sDone').textContent = mode === 'sprint' ? '0' : `0/${queue.length}`;
   $('sAcc').textContent = '100%'; $('sSpeed').textContent = '0';
   next();
+}
+
+// 空题板：池空或全被过滤时显示引导（不产生空会话）；
+// filteredOut=池有条目但全被 codeOf 过滤——形码方案明示取题仅单字（§3.4）
+function showEmptyBoard(filteredOut) {
+  const packMissing = scheme.packId && packState(scheme.packId) !== 'ready';
+  $('word').textContent = '∅';
+  $('hint').textContent = '';
+  $('guide').textContent = packMissing ? `${DATA_PACKS[scheme.packId].name}未就绪 —— 网络就绪后可重试加载`
+    : mode === 'personal' ? '还没有导入词库 —— 去「导入」页添加你的词库，或换别的模式'
+    : mode.startsWith('weak:') ? '该键还没有练习数据 —— 先练几轮'
+    : mode === 'mistakes' ? '错词本是空的 —— 先去练一轮'
+    : filteredOut && scheme.paradigm === 'shape' ? `${scheme.name}取题仅单字 —— 多字词与整句不取题，换个模式试试`
+    : '这个模式在当前方案下暂无可练内容 —— 换别的模式试试';
+  if (packMissing) {
+    const btn = document.createElement('button');
+    btn.className = 'btn primary';
+    btn.style.marginTop = '12px';
+    btn.textContent = '重试加载资料包';
+    btn.onclick = async () => { await ensurePack(scheme); startSession(mode); };
+    $('guide').appendChild(document.createElement('br'));
+    $('guide').appendChild(btn);
+  }
+  $('inbox').value = '';
+  $('inbox').blur();
+  $('fb').textContent = '';
+  $('prog').style.width = '0%';
+  $('sDone').textContent = '0/0';
+  clearKeys();
 }
 
 function current() { return queue[idx]; }
@@ -279,7 +284,13 @@ function updateHighlight(p) {
     keyEls[after.key].classList.add('ymhi');
     keyEls[after.key].dataset.n = String(p + 2);
   }
-  if (hintLevel === 'full') $('guide').innerHTML = guideText();
+  if (hintLevel === 'full') {
+    let html = guideText();
+    // 五笔 86 兜底形态（§4.2）：展开当前键的字根候选表（与字根总表页同源取数）
+    const curRoots = scheme.rootHint && cur ? scheme.rootHint(cur.key) : '';
+    if (curRoots) html += `<div class="roothint">${esc(curRoots)}</div>`;
+    $('guide').innerHTML = html;
+  }
 }
 
 function next() {
@@ -576,6 +587,10 @@ function renderCourse() {
   const course = courseOf(scheme.id);
   const ol = $('stages');
   ol.innerHTML = '';
+  if (course.form === 'rootTable') { // 五笔 86 降级形态：课程视图内只一页字根总表（〔规格推断〕8，issue #6）
+    renderRootsPage(course);
+    return;
+  }
   course.stages.forEach((st, i) => {
     const li = document.createElement('li');
     li.innerHTML = `<span>${i + 1}. ${st.name}<small>${st.sub}</small></span>`;
@@ -599,6 +614,54 @@ function renderCourse() {
   const body = $('stageBody');
   body.innerHTML = '';
   renderStage(body, course.stages[stageIdx]);
+}
+
+// 降级形态课程视图：字根总表页（五笔 86，issue #6）——无课程阶/无 SRS/不入七日挑战，
+// 页面自带形态边界空态；自由练习从本页直达单字取题（§2/§4.1 五笔列、§5.1）
+function renderRootsPage(course) {
+  const body = $('stageBody');
+  body.innerHTML = `<h3>${esc(course.name)}</h3><p class="sub">${esc(course.sub)}</p>
+    <p>${esc(course.body)}</p>
+    <div class="kbmap" id="kbmap"></div>
+    <div class="rootdetail" id="rootdetail"><p class="sub">点击任意键或下方键位，查看键上字根与例字。</p></div>
+    <div class="rootcats" id="rootcats"></div>
+    <p class="formnote">本方案无五阶课程、无间隔重复操练，也不入七日挑战——先认字根，再自由练习。</p>
+    <button class="btn primary" id="goFree">自由练习 · 仅单字出题</button>`;
+  const pick = (ch) => {
+    const info = (course.roots || {})[ch];
+    const box = $('rootdetail');
+    if (!info) {
+      box.innerHTML = `<p class="sub">${ch === 'z' ? 'Z 学习键 · 不参与取码' : `键 ${esc(ch.toUpperCase())}`}</p>`;
+      return;
+    }
+    const exHtml = (info.ex || []).map((w) => {
+      const c = scheme.codeOf({ word: w });
+      return `<span class="rootex">${esc(w)}<small>${c ? esc(c) : '…'}</small></span>`;
+    }).join(' ');
+    box.innerHTML = `<h4>${esc(ch.toUpperCase())}<small>${esc(info.zone)}区${info.pos}位</small></h4>
+      <p>键上字根：${esc(info.roots)}</p>
+      ${exHtml ? `<p class="rootexwrap">例字（码随资料包派生）：${exHtml}</p>` : ''}`;
+  };
+  buildKeyboard($('kbmap'), { map: true, onKey: pick });
+  const cats = $('rootcats');
+  for (const g of course.zones || []) {
+    const sec = document.createElement('div');
+    sec.className = 'rootcat';
+    sec.innerHTML = `<b>${esc(g.label)}</b>${g.desc ? ` <span class="sub">${esc(g.desc)}</span>` : ''}`;
+    const row = document.createElement('div');
+    row.className = 'rootrow';
+    for (const k of g.keys) {
+      const b = document.createElement('button');
+      b.className = 'btn ghost rootchip';
+      const lab = scheme.layout.keyLabel(k);
+      b.innerHTML = `${esc(lab.main)}<small>${esc(lab.sub)}</small>`;
+      b.onclick = () => pick(k);
+      row.appendChild(b);
+    }
+    sec.appendChild(row);
+    cats.appendChild(sec);
+  }
+  $('goFree').onclick = () => gotoPractice('chars');
 }
 
 function renderStage(body, st) {
@@ -895,7 +958,7 @@ async function handleFiles(files) {
     lines.push(`<div class="line"><b>${esc(f.name)}</b> · ${r.format} · 读入 ${r.entries.length} 条，去重后 ${entries.length} 条入库` +
       `${dropped ? ` · <span class="bad">${dropped} 条无法切分拼音且无可用码未入库</span>` : ''} · 练习池现有 ${res.kept} 条</div>`);
   }
-  lines.push('<div class="line">形码方案（仓颉/速成）仅取导入词中的单字出题，多字词不取题。</div>');
+  lines.push('<div class="line">形码方案（仓颉/速成/五笔 86）仅取导入词中的单字出题，多字词不取题。</div>');
   lines.push('<div class="line">文件仅在你的浏览器内解析，未上传任何服务器。</div>');
   report.innerHTML = lines.join('');
   renderLiblist();

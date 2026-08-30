@@ -176,6 +176,9 @@ h2 { font-size: 1.12rem; font-weight: 600; margin: 28px 0 12px; color: var(--bon
   padding: 1px 7px; border-radius: 5px;
 }
 .guide .sub2 { color: var(--ash); font-size: 0.84rem; }
+.guide .roothint { /* 五笔 86 兜底形态：当前键字根候选表（§4.2），独占一行 */
+  flex-basis: 100%; margin-top: 2px; color: var(--ash); font-size: 0.84rem;
+}
 
 .inbox {
   display: block; margin: 14px auto 0; width: min(340px, 86vw);
@@ -451,6 +454,10 @@ h2 { font-size: 1.12rem; font-weight: 600; margin: 28px 0 12px; color: var(--bon
   font-family: var(--serif); font-size: 1.05rem;
 }
 .rootex small { font-family: var(--mono); color: var(--cinnabar); margin-left: 4px; font-size: 0.78rem; }
+.formnote { /* 降级形态边界空态说明（五笔 86 字根总表页，issue #6） */
+  margin-top: 18px; color: var(--ash); font-size: 0.86rem;
+}
+#goFree { margin-top: 12px; }
 
 /* ---- 导入视图 ---- */
 .fmtgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 20px 0; }
