@@ -1,0 +1,39 @@
+<view class="page">
+  <view class="sec">提示档</view>
+  <view class="card seg">
+    <view class="segbtn {{hintLevel === 'full' ? 'on' : ''}}" data-v="full" bindtap="onHint">全提示</view>
+    <view class="segbtn {{hintLevel === 'keys' ? 'on' : ''}}" data-v="keys" bindtap="onHint">仅键位</view>
+    <view class="segbtn {{hintLevel === 'none' ? 'on' : ''}}" data-v="none" bindtap="onHint">无提示</view>
+  </view>
+
+  <view class="sec">显示与反馈</view>
+  <view class="card rows">
+    <view class="row"><text>显示拼音</text><switch checked="{{showPy}}" color="#00F2FF" bindchange="onPy" /></view>
+    <view class="row"><text>显示编码</text><switch checked="{{showCode}}" color="#00F2FF" bindchange="onCode" /></view>
+    <view class="row"><text>键盘高亮提示</text><switch checked="{{hlKeys}}" color="#00F2FF" bindchange="onHl" /></view>
+    <view class="row"><text>击键音效</text><switch checked="{{sound}}" color="#00F2FF" bindchange="onSound" /></view>
+    <view class="row"><text>击键震荡（键帽动画）</text><switch checked="{{keyImpact}}" color="#00F2FF" bindchange="onImpact" /></view>
+    <view class="row"><text>错键整段清空（关=标红续打）</text><switch checked="{{wrongPunish}}" color="#00F2FF" bindchange="onPunish" /></view>
+  </view>
+
+  <view class="sec">输入方式</view>
+  <view class="card seg">
+    <view class="segbtn {{keyboardMode === 'vkb' ? 'on' : ''}}" data-v="0" bindtap="onKbMode">自绘键盘</view>
+    <view class="segbtn {{keyboardMode === 'system' ? 'on' : ''}}" data-v="1" bindtap="onKbMode">系统键盘</view>
+  </view>
+  <view class="note">系统键盘：点按屏幕唤起手机自带键盘，按字母键即输入编码。</view>
+
+  <view class="sec">方案</view>
+  <view class="card rows">
+    <view class="row" bindtap="goSchemes">
+      <text>当前方案：{{schemeLabel}}</text>
+      <text class="arrow">更换 →</text>
+    </view>
+  </view>
+
+  <view class="sec">数据</view>
+  <view class="card rows">
+    <view class="row danger" bindtap="resetAll"><text>重置全部本地数据</text></view>
+  </view>
+  <view class="note">所有数据仅保存在本机，不上传任何服务器。</view>
+</view>

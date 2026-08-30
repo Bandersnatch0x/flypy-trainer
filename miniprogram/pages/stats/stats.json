@@ -1,0 +1,6 @@
+{
+  "navigationBarTitleText": "统计",
+  "usingComponents": {
+    "keyboard": "/components/keyboard/keyboard"
+  }
+}

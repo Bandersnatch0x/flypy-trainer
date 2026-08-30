@@ -1,0 +1,92 @@
+<view class="page" bindtap="refocusSys">
+  <!-- 模式栏 -->
+  <scroll-view scroll-x class="modes" enhanced show-scrollbar="{{false}}">
+    <view class="modeinner">
+      <view wx:for="{{modes}}" wx:key="mode"
+        class="chip {{item.mode === mode ? 'on' : ''}}"
+        data-mode="{{item.mode}}" bindtap="onMode">{{item.label}}</view>
+    </view>
+  </scroll-view>
+
+  <!-- 指标行 -->
+  <view class="metrics">
+    <text class="m mono">{{timeStr}}</text>
+    <text class="m mono">{{speed}}<text class="unit">键/分</text></text>
+    <text class="m mono accent">×{{combo}}<text class="unit">连击</text></text>
+    <text class="m mono">{{acc}}</text>
+  </view>
+
+  <!-- 结算 -->
+  <view wx:if="{{result}}" class="card result">
+    <view class="resgrid">
+      <view><text class="b">{{result.acc}}%</text><text class="t">准确率</text></view>
+      <view><text class="b">{{result.kpm}}</text><text class="t">键/分</text></view>
+      <view><text class="b">{{resTime}}</text><text class="t">用时</text></view>
+      <view><text class="b">{{result.words}}</text><text class="t">词条</text></view>
+    </view>
+    <view class="resbtns">
+      <button class="btn primary" bindtap="again">再来一轮</button>
+      <button class="btn" open-type="share">转发战绩</button>
+      <button class="btn" bindtap="savePoster">保存海报</button>
+    </view>
+    <view class="reshome" bindtap="goHome">返回首页</view>
+  </view>
+
+  <!-- 空态 -->
+  <view wx:elif="{{!active}}" class="empty">
+    <text class="symbol">∅</text>
+    <text class="guide">{{emptyMsg}}</text>
+    <button wx:if="{{packMissing}}" class="btn primary" bindtap="retryPack">重试加载资料包</button>
+  </view>
+
+  <!-- 题板 -->
+  <block wx:else>
+    <view class="wordrow">
+      <text wx:for="{{charStates}}" wx:key="index" class="slot mono {{item.st}}">{{item.ch}}</text>
+    </view>
+    <view class="hintrow">
+      <text wx:if="{{py}}">{{py}}</text>
+      <text wx:if="{{showCode}}" class="code mono">{{display}}</text>
+    </view>
+    <view class="coderow">
+      <text wx:for="{{codeChars}}" wx:key="index" class="chip-code mono {{item.st}}">{{item.ch}}</text>
+    </view>
+    <view class="fb {{fb ? 'show' : ''}}">{{fb}}</view>
+    <view wx:if="{{steps.length}}" class="steps">
+      <block wx:for="{{steps}}" wx:key="index">第{{index + 1}}步 按 <text class="{{index % 2 ? 'g2' : 'g1'}}">{{item}}</text>　</block>
+    </view>
+    <view class="prog"><view class="bar" style="width: {{prog}}%"></view></view>
+    <view class="doneinfo mono">{{done}}</view>
+  </block>
+
+  <!-- 自绘键盘 -->
+  <keyboard
+    wx:if="{{keyboardMode === 'vkb'}}"
+    rows="{{kbRows}}"
+    cur-key="{{curKey}}" next-key="{{nextKey}}"
+    pressed-key="{{pressedKey}}" err-key="{{errKey}}"
+    bind:key="onKey" />
+
+  <!-- fn 行 -->
+  <view class="fnrow">
+    <view class="fnbtn {{showCode ? 'on' : ''}}" bindtap="toggleCode">码</view>
+    <view class="fnbtn {{soundOn ? 'on' : ''}}" bindtap="toggleSound">音</view>
+    <view class="fnbtn {{wrongPunish ? 'on' : ''}}" bindtap="togglePunish">清</view>
+    <view class="fnbtn" bindtap="toggleKbMode">{{keyboardMode === 'vkb' ? '系统键盘' : '虚拟键盘'}}</view>
+    <view class="fnbtn" bindtap="endSession">结束练习</view>
+  </view>
+
+  <!-- 系统键盘通道：屏外隐藏输入框逐字符捕获 -->
+  <input
+    wx:if="{{keyboardMode === 'system'}}"
+    class="sysinput"
+    focus="{{sysFocus}}"
+    value="{{''}}"
+    hold-keyboard="{{true}}"
+    adjust-position="{{false}}"
+    bindinput="onSysInput"
+    bindblur="onSysBlur" />
+
+  <!-- 海报画布：屏外离屏渲染，仅用于导出 -->
+  <canvas type="2d" id="posterCanvas" class="postercanvas"></canvas>
+</view>

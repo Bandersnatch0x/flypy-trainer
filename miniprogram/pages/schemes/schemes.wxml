@@ -1,0 +1,32 @@
+<view class="page">
+  <view class="head">
+    <view class="title">方案库</view>
+    <view class="sub">音码打声、形码打形——选一个开练。</view>
+  </view>
+
+  <!-- 旗舰大卡 -->
+  <view class="card scard flagship {{flagship.isCur ? 'cur' : ''}}">
+    <view class="top"><text class="flagbadge">旗舰 · 默认</text><text class="sname">{{flagship.name}}</text>
+      <text wx:for="{{flagship.tags}}" wx:key="*this" class="paratag">{{item}}</text></view>
+    <view class="feat">{{flagship.feat}}</view>
+    <view wx:if="{{flagship.summary}}" class="progress">{{flagship.summary}}</view>
+    <view class="state"><text class="formtag">{{flagship.form}}</text><text class="datastate">{{flagship.dataState}}</text></view>
+    <view wx:if="{{flagship.isCur}}" class="inuse">使用中</view>
+    <button wx:else class="btn primary" data-id="flypy" bindtap="applyScheme">切换开练</button>
+  </view>
+
+  <!-- 分组 -->
+  <view wx:for="{{groups}}" wx:for-item="g" wx:key="title" class="group">
+    <view class="gtitle">{{g.title}}<text class="gblurb">{{g.blurb}}</text></view>
+    <view wx:for="{{g.cards}}" wx:for-item="c" wx:key="id" class="card scard {{c.degraded ? 'degraded' : ''}}">
+      <view class="top"><text class="sname">{{c.name}}</text>
+        <text wx:for="{{c.tags}}" wx:for-item="t" wx:key="*this" class="paratag">{{t}}</text>
+        <text wx:if="{{c.grayTag}}" class="formtag gray">{{c.grayTag}}</text></view>
+      <view class="feat">{{c.feat}}</view>
+      <view class="state"><text class="formtag">{{c.form}}</text><text class="datastate">{{c.dataState}}</text>
+        <text wx:if="{{c.summary}}" class="sum"> · {{c.summary}}</text></view>
+      <view wx:if="{{c.isCur}}" class="inuse">使用中</view>
+      <button wx:else class="btn ghost" data-id="{{c.id}}" bindtap="applyScheme">切换开练</button>
+    </view>
+  </view>
+</view>

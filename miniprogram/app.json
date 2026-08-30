@@ -1,0 +1,36 @@
+{
+  "pages": [
+    "pages/home/home",
+    "pages/practice/practice",
+    "pages/course/course",
+    "pages/stats/stats",
+    "pages/mine/mine",
+    "pages/settings/settings",
+    "pages/schemes/schemes",
+    "pages/import/import",
+    "pages/mistakes/mistakes"
+  ],
+  "window": {
+    "navigationBarBackgroundColor": "#131313",
+    "navigationBarTextStyle": "white",
+    "navigationBarTitleText": "鹤练",
+    "backgroundColor": "#131313",
+    "backgroundTextStyle": "light"
+  },
+  "tabBar": {
+    "color": "#8A8A8A",
+    "selectedColor": "#00F2FF",
+    "backgroundColor": "#1A1A1A",
+    "borderStyle": "black",
+    "list": [
+      { "pagePath": "pages/home/home", "text": "首页" },
+      { "pagePath": "pages/course/course", "text": "课程" },
+      { "pagePath": "pages/stats/stats", "text": "统计" },
+      { "pagePath": "pages/mine/mine", "text": "我的" }
+    ]
+  },
+  "style": "v2",
+  "__usePrivacyCheck__": true,
+  "sitemapLocation": "sitemap.json",
+  "lazyCodeLoading": "requiredComponents"
+}

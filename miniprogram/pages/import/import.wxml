@@ -1,0 +1,45 @@
+<view class="page">
+  <view class="sec">从文件导入</view>
+  <view class="card drop" bindtap="pickFile">
+    <text class="d1">点按选取聊天中的词库文件</text>
+    <text class="d2">支持 Rime userdb 导出 / 词库 yaml / 自定义短语 / 「词 拼音」纯文本</text>
+  </view>
+  <view wx:if="{{report}}" class="report">
+    <view wx:for="{{report}}" wx:key="index" class="line {{item.bad ? 'bad' : ''}} {{item.note ? 'note' : ''}}">
+      <text wx:if="{{item.name}}" class="fname">{{item.name}}</text> · {{item.msg}}
+    </view>
+  </view>
+
+  <view class="sec">词表集市</view>
+  <view wx:for="{{market}}" wx:key="file" class="card lib">
+    <view class="info"><text class="lname">{{item.name}}</text><text class="lsub">词表集市 · 同源静态包</text></view>
+    <button class="btn {{item.subbed ? 'ghost' : 'primary'}}" data-file="{{item.file}}" bindtap="subscribe" disabled="{{item.subbed}}">{{item.subbed ? '已订阅' : '一键订阅'}}</button>
+  </view>
+
+  <view class="sec">自定义词单</view>
+  <view class="card custom">
+    <textarea value="{{custom}}" placeholder="每行一条：词 拼音&#10;例：鹤练 he lian" bindinput="onCustomInput" auto-height maxlength="-1" />
+    <button class="btn primary" bindtap="addCustom">加入词单</button>
+  </view>
+
+  <view class="sec">已导入词库</view>
+  <view wx:if="{{!libs.length}}" class="empty">尚未导入词库。</view>
+  <view wx:for="{{libs}}" wx:key="name" class="card lib">
+    <view class="info"><text class="lname">{{item.name}}</text><text class="lsub">{{item.time}} · {{item.n}} 条</text></view>
+    <button class="btn ghost" data-name="{{item.name}}" bindtap="removeLib">删除此库</button>
+  </view>
+  <view wx:if="{{libs.length}}" class="card lib">
+    <view class="info"><text class="lname">当前练习池（合并去重后）</text><text class="lsub">{{poolLen}} 条，上限 20000</text></view>
+    <button class="btn ghost" bindtap="clearAll">清空全部</button>
+  </view>
+
+  <view class="sec">数据备份</view>
+  <view class="card lib">
+    <view class="info"><text class="lname">全部本地数据</text><text class="lsub">设置/统计/词库/错词本 打包为 JSON</text></view>
+    <button class="btn primary" bindtap="exportBackup">导出备份</button>
+  </view>
+  <view class="card lib">
+    <view class="info"><text class="lname">恢复备份</text><text class="lsub">选取备份文件，覆盖同名数据项</text></view>
+    <button class="btn ghost" bindtap="importBackup">导入备份</button>
+  </view>
+</view>

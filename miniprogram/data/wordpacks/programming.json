@@ -1,0 +1,22 @@
+{
+  "name": "编程术语",
+  "desc": "开发者日常高频词，适合用你的输入法肌肉记忆练双拼",
+  "entries": [
+    { "w": "代码", "p": "dai ma" }, { "w": "部署", "p": "bu shu" }, { "w": "提交", "p": "ti jiao" },
+    { "w": "分支", "p": "fen zhi" }, { "w": "合并", "p": "he bing" }, { "w": "冲突", "p": "chong tu" },
+    { "w": "回滚", "p": "hui gun" }, { "w": "缓存", "p": "huan cun" }, { "w": "索引", "p": "suo yin" },
+    { "w": "编译", "p": "bian yi" }, { "w": "调试", "p": "tiao shi" }, { "w": "断点", "p": "duan dian" },
+    { "w": "变量", "p": "bian liang" }, { "w": "函数", "p": "han shu" }, { "w": "参数", "p": "can shu" },
+    { "w": "返回", "p": "fan hui" }, { "w": "递归", "p": "di gui" }, { "w": "遍历", "p": "bian li" },
+    { "w": "数组", "p": "shu zu" }, { "w": "对象", "p": "dui xiang" }, { "w": "接口", "p": "jie kou" },
+    { "w": "请求", "p": "qing qiu" }, { "w": "响应", "p": "xiang ying" }, { "w": "超时", "p": "chao shi" },
+    { "w": "重试", "p": "chong shi" }, { "w": "队列", "p": "dui lie" }, { "w": "线程", "p": "xian cheng" },
+    { "w": "进程", "p": "jin cheng" }, { "w": "内存", "p": "nei cun" }, { "w": "泄漏", "p": "xie lou" },
+    { "w": "垃圾回收", "p": "la ji hui shou" }, { "w": "重构", "p": "chong gou" }, { "w": "迭代", "p": "die dai" },
+    { "w": "需求", "p": "xu qiu" }, { "w": "评审", "p": "ping shen" }, { "w": "上线", "p": "shang xian" },
+    { "w": "灰度", "p": "hui du" }, { "w": "监控", "p": "jian kong" }, { "w": "告警", "p": "gao jing" },
+    { "w": "日志", "p": "ri zhi" }, { "w": "链路", "p": "lian lu" }, { "w": "依赖", "p": "yi lai" },
+    { "w": "版本", "p": "ban ben" }, { "w": "标签", "p": "biao qian" }, { "w": "仓库", "p": "cang ku" },
+    { "w": "克隆", "p": "ke long" }, { "w": "推送", "p": "tui song" }, { "w": "拉取", "p": "la qu" }
+  ]
+}

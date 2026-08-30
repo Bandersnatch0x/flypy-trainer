@@ -1,0 +1,57 @@
+<view class="page">
+  <!-- PB 与总览 -->
+  <view class="cards">
+    <view class="card ov"><text class="b mono">{{totMin}}</text><text class="t">总分钟</text></view>
+    <view class="card ov"><text class="b mono">{{pbKpm}}</text><text class="t">PB 键/分 · {{schemeName}}</text></view>
+    <view class="card ov"><text class="b mono">{{pbAcc}}%</text><text class="t">PB 准确率</text></view>
+    <view class="card ov"><text class="b mono">{{streak}}</text><text class="t">连练天数</text></view>
+  </view>
+
+  <!-- 徽章墙 -->
+  <view class="sec">徽章墙</view>
+  <view class="badges">
+    <view wx:for="{{badges}}" wx:key="name" class="badge {{item.got ? 'got' : ''}}">
+      <text class="bname">{{item.name}}</text>
+      <text class="bdesc">{{item.got ? '已达成' : '未达成'}}</text>
+    </view>
+  </view>
+
+  <!-- 年度日历 -->
+  <view class="sec">键位日历 · 近一年</view>
+  <view class="card calwrap">
+    <view class="cal">
+      <i wx:for="{{cal}}" wx:key="index" class="cell lv{{item.lv}}"></i>
+    </view>
+  </view>
+
+  <!-- 错键热力 -->
+  <view class="sec">错键热力 · {{schemeName}}（点键直达弱键特训）</view>
+  <view class="card heatwrap">
+    <keyboard rows="{{kbRows}}" heat="{{heat}}" bind:key="onHeatKey" />
+    <view wx:if="{{heatTop.length}}" class="heattop">
+      <text wx:for="{{heatTop}}" wx:key="k" class="hk">{{item.k}} 错率 {{item.rate}}%</text>
+    </view>
+  </view>
+
+  <!-- 准确率曲线（条形近似） -->
+  <view class="sec">准确率趋势 · 近 40 会话</view>
+  <view class="card sparkwrap">
+    <view wx:if="{{sparkNote}}" class="no">{{sparkNote}}</view>
+    <view wx:else class="spark">
+      <view wx:for="{{bars}}" wx:key="index" class="bar {{item.good ? 'good' : ''}}" style="height: {{item.h}}rpx"></view>
+    </view>
+  </view>
+
+  <!-- 会话列表 -->
+  <view class="sec">会话记录</view>
+  <view wx:if="{{empty}}" class="no">还没有会话记录</view>
+  <view wx:else class="card sesslist">
+    <view wx:for="{{list}}" wx:key="index" class="sess">
+      <text class="stime">{{item.time}}</text>
+      <text class="smode">{{item.schemeName}} · {{item.mode}}</text>
+      <text class="sacc mono {{item.acc >= 95 ? 'ok' : ''}}">{{item.acc}}%</text>
+      <text class="skpm mono">{{item.kpm}} 键/分</text>
+      <text class="ssecs mono">{{item.secs}}s</text>
+    </view>
+  </view>
+</view>

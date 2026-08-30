@@ -1,0 +1,17 @@
+.page { padding: 24rpx 28rpx 48rpx; }
+.sec { font-size: 26rpx; color: var(--ghost); margin: 28rpx 0 16rpx; }
+.card { background: var(--surface); border: 2rpx solid var(--stroke); border-radius: 16rpx; }
+
+.seg { display: flex; overflow: hidden; }
+.segbtn { flex: 1; text-align: center; padding: 24rpx 0; font-size: 28rpx; color: var(--ghost); }
+.segbtn.on { color: var(--accent); background: rgba(0, 242, 255, 0.08); }
+
+.rows { padding: 8rpx 24rpx; }
+.row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 24rpx 0; border-bottom: 2rpx solid var(--stroke); font-size: 28rpx;
+}
+.row:last-child { border-bottom: none; }
+.row.danger text { color: var(--err); }
+.arrow { color: var(--accent); font-size: 26rpx; }
+.note { font-size: 22rpx; color: var(--ghost); margin-top: 12rpx; }

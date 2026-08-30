@@ -1,0 +1,21 @@
+.page { padding: 32rpx 28rpx 48rpx; }
+.head { display: flex; flex-direction: column; margin-bottom: 32rpx; }
+.wordmark { font-size: 56rpx; font-weight: 700; }
+.sub { font-size: 24rpx; color: var(--ghost); margin-top: 8rpx; }
+
+.btn { font-size: 28rpx; padding: 16rpx 40rpx; border-radius: 12rpx; background: var(--surface); color: var(--text); border: 2rpx solid var(--stroke); }
+.btn.primary { background: rgba(0, 242, 255, 0.12); border-color: var(--accent); color: var(--accent); }
+.btn.big { width: 100%; margin-bottom: 32rpx; }
+.btn.share { margin-top: 24rpx; }
+
+.card { background: var(--surface); border: 2rpx solid var(--stroke); border-radius: 16rpx; }
+.rows { padding: 8rpx 24rpx; }
+.row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 28rpx 0; border-bottom: 2rpx solid var(--stroke); font-size: 28rpx;
+}
+.row:last-child { border-bottom: none; }
+.val { color: var(--ghost); font-size: 26rpx; }
+
+.about { margin-top: 32rpx; padding: 28rpx 24rpx; }
+.aline { font-size: 24rpx; color: var(--ghost); line-height: 1.8; }

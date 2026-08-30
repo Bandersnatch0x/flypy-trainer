@@ -1,0 +1,20 @@
+.page { padding: 24rpx 28rpx 48rpx; }
+.actions { display: flex; gap: 16rpx; }
+.btn { font-size: 26rpx; padding: 14rpx 28rpx; border-radius: 12rpx; background: var(--surface); color: var(--text); border: 2rpx solid var(--stroke); }
+.btn.primary { background: rgba(0, 242, 255, 0.12); border-color: var(--accent); color: var(--accent); }
+.btn.ghost { color: var(--ghost); }
+.btn[disabled] { color: var(--ghost); background: var(--surface); }
+.note { font-size: 22rpx; color: var(--ghost); margin: 16rpx 0 24rpx; }
+
+.emptywrap { text-align: center; padding: 96rpx 0; color: var(--ghost); }
+.emptywrap .big { font-size: 80rpx; margin-bottom: 16rpx; }
+.emptywrap .sub { font-size: 22rpx; margin-top: 8rpx; }
+
+.card { background: var(--surface); border: 2rpx solid var(--stroke); border-radius: 16rpx; }
+.mklist { padding: 8rpx 24rpx; }
+.mk { display: flex; align-items: center; gap: 24rpx; padding: 24rpx 0; border-bottom: 2rpx solid var(--stroke); }
+.mk:last-child { border-bottom: none; }
+.mk .w { font-size: 32rpx; }
+.mk .c { font-size: 26rpx; color: var(--accent); }
+.mk .n { margin-left: auto; font-size: 22rpx; color: var(--ghost); }
+.mono { font-family: "JetBrains Mono", Menlo, Consolas, monospace; }

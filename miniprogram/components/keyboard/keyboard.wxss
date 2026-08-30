@@ -1,0 +1,47 @@
+/* 自绘键盘：rpx 自适应（键高 88rpx / 间隙 8rpx / 容器上限 820rpx），底部留安全区 */
+.kb {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8rpx;
+  max-width: 820rpx;
+  margin: 0 auto;
+  padding: 8rpx 8rpx calc(16rpx + env(safe-area-inset-bottom));
+}
+.kbrow {
+  display: flex;
+  gap: 8rpx;
+  width: 100%;
+  justify-content: center;
+}
+.key {
+  flex: 1;
+  min-width: 0;
+  height: 88rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface);
+  border: 2rpx solid var(--stroke);
+  border-radius: 8rpx;
+  transition: transform 60ms, border-color 80ms, background 80ms;
+}
+.kbrow.wide .key { height: 76rpx; } /* 41 键大行（注音/仓颉）压低换密度 */
+.key.special { flex: 1.6; }
+.key .sm { font-size: 30rpx; line-height: 1.1; color: var(--text); }
+.key .ym { font-size: 18rpx; line-height: 1.1; color: var(--ghost); }
+.key.hover { background: #222; }
+.key.pressed { transform: scale(0.94); background: #24343a; border-color: var(--accent); }
+.key.cur { border-color: var(--accent); box-shadow: 0 0 12rpx rgba(0, 242, 255, 0.45); }
+.key.cur .sm { color: var(--accent); }
+.key.next { border-color: rgba(0, 242, 255, 0.35); }
+.key.err { border-color: var(--err); box-shadow: 0 0 12rpx rgba(255, 23, 68, 0.5); animation: kbshake 130ms; }
+.key.heat1 { background: rgba(196, 87, 78, 0.22); }
+.key.heat2 { background: rgba(196, 87, 78, 0.5); }
+.key.heat3 { background: rgba(196, 87, 78, 0.85); }
+@keyframes kbshake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4rpx); }
+  75% { transform: translateX(4rpx); }
+}

@@ -1,0 +1,30 @@
+.page { padding: 32rpx 28rpx 48rpx; }
+.head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 32rpx; }
+.brand { display: flex; flex-direction: column; }
+.wordmark { font-size: 56rpx; font-weight: 700; }
+.en { font-size: 20rpx; letter-spacing: 4rpx; color: var(--ghost); }
+.headright { display: flex; flex-direction: column; gap: 12rpx; align-items: flex-end; }
+.chip {
+  padding: 8rpx 20rpx; font-size: 24rpx; border-radius: 28rpx;
+  background: var(--surface); border: 2rpx solid var(--stroke); color: var(--text);
+}
+.chip.accent { color: var(--accent); border-color: rgba(0, 242, 255, 0.4); }
+
+.cards { display: flex; gap: 16rpx; margin-bottom: 36rpx; }
+.ov { flex: 1; padding: 24rpx 16rpx; display: flex; flex-direction: column; align-items: center; }
+.ov .b { font-size: 44rpx; color: var(--accent); }
+.ov .t { font-size: 22rpx; color: var(--ghost); margin-top: 8rpx; }
+
+.sec { font-size: 26rpx; color: var(--ghost); margin: 28rpx 0 16rpx; }
+
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16rpx; }
+.mcard { padding: 28rpx 24rpx; display: flex; flex-direction: column; }
+.mlabel { font-size: 30rpx; }
+.mdesc { font-size: 22rpx; color: var(--ghost); margin-top: 8rpx; }
+
+.confusrow { display: flex; flex-wrap: wrap; gap: 12rpx; }
+.confus { color: var(--text); }
+
+.market { display: flex; justify-content: space-between; align-items: center; padding: 28rpx 24rpx; }
+.market view { display: flex; flex-direction: column; }
+.arrow { font-size: 36rpx; color: var(--accent); }

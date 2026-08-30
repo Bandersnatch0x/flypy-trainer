@@ -1,0 +1,87 @@
+<view class="page">
+  <view wx:if="{{packMissing}}" class="empty">
+    <text class="guide">资料包未就绪 —— 稍后可点按重试</text>
+    <button class="btn primary" bindtap="retryPack">重试加载资料包</button>
+  </view>
+
+  <block wx:else>
+    <!-- 五阶进度（降级形态仅字根总表一阶） -->
+    <view class="stages">
+      <view wx:for="{{stages}}" wx:key="index"
+        class="stage {{index === stageIdx ? 'on' : ''}} {{index < stageIdx ? 'done' : ''}}"
+        data-i="{{index}}" bindtap="onStage">
+        <text class="sn">{{index < stageIdx ? '✓' : index + 1}}</text>
+        <view class="st"><text class="sname">{{item.name}}</text><text class="ssub">{{item.sub}}</text></view>
+      </view>
+    </view>
+
+    <!-- 七日挑战卡 -->
+    <view wx:if="{{challenge && !challenge.started}}" class="card chal" bindtap="startChallenge">
+      <text class="cname">七日挑战</text>
+      <text class="csub">{{challenge.sub}}</text>
+    </view>
+    <view wx:elif="{{challenge}}" class="card chal">
+      <text class="cname">七日挑战 · 第 {{challenge.today + 1}} 天：{{challenge.items[challenge.today].label}}</text>
+      <view class="days">
+        <text wx:for="{{challenge.items}}" wx:key="index" class="day {{item.done ? 'done' : ''}}">{{item.done ? '✓' : item.tag}}</text>
+      </view>
+    </view>
+
+    <!-- 阶段主体 -->
+    <view wx:if="{{vm}}" class="card body">
+      <view class="bname">{{vm.name}}</view>
+      <view wx:if="{{vm.body}}" class="btext">{{vm.body}}</view>
+
+      <!-- practice 阶 -->
+      <button wx:if="{{vm.kind === 'practice'}}" class="btn primary" data-mode="{{vm.mode}}" bindtap="goStagePractice">开始练习</button>
+
+      <!-- mistakes 阶 -->
+      <block wx:if="{{vm.kind === 'mistakes'}}">
+        <view wx:if="{{!vm.n}}" class="csub">词库全方案通用，立即可练</view>
+        <button class="btn primary" bindtap="goMistakes" disabled="{{!vm.n}}">{{vm.n ? '开始强化' : '错词本是空的'}}</button>
+      </block>
+
+      <!-- drill 阶 -->
+      <block wx:if="{{vm.kind === 'drill'}}">
+        <view wx:if="{{vm.empty}}" class="csub">当前方案的操练内容建设中 —— 先去「练习」用内置池自由练习。</view>
+        <block wx:else>
+          <button wx:if="{{vm.dueCount}}" class="btn primary" bindtap="drillDue">先练 {{vm.dueCount}} 个到期{{vm.unitName}}</button>
+          <view wx:else class="csub">暂无到期待复习{{vm.unitName}}，也可直接点下方单元操练</view>
+          <view wx:for="{{vm.groups}}" wx:for-item="g" wx:key="label" class="dgroup">
+            <view wx:if="{{g.label}}" class="dlabel">{{g.label}}</view>
+            <view class="dkeys">
+              <view wx:for="{{g.keys}}" wx:for-item="u" wx:key="id"
+                class="dkey" data-id="{{u.id}}" bindtap="drillUnit">
+                <text class="dm">{{u.main}}</text><text wx:if="{{u.sub}}" class="ds">{{u.sub}}</text>
+                <text wx:if="{{u.due}}" class="due">●</text>
+              </view>
+            </view>
+          </view>
+        </block>
+      </block>
+
+      <!-- keys 阶 / 字根总表：键盘图 + 说明 -->
+      <block wx:if="{{vm.kind === 'map' || vm.kind === 'heat' || vm.kind === 'roots'}}">
+        <keyboard rows="{{kbRows}}" heat="{{heat}}" bind:key="onMapKey" />
+        <view wx:if="{{vm.kind === 'heat'}}" class="csub">颜色越深错率越高 · 点键直达弱键特训</view>
+        <view wx:if="{{vm.kind === 'map'}}" class="legend">
+          <text>点击键位查看说明</text>
+        </view>
+        <block wx:if="{{vm.kind === 'roots'}}">
+          <view wx:for="{{vm.groups}}" wx:for-item="g" wx:key="label" class="dgroup">
+            <view class="dlabel">{{g.label}}<text wx:if="{{g.desc}}" class="csub"> {{g.desc}}</text></view>
+            <view class="dkeys">
+              <view wx:for="{{g.keys}}" wx:for-item="u" wx:key="key"
+                class="dkey" data-key="{{u.key}}" bindtap="onChipKey">
+                <text class="dm">{{u.main}}</text><text wx:if="{{u.sub}}" class="ds">{{u.sub}}</text>
+              </view>
+            </view>
+          </view>
+        </block>
+        <view wx:if="{{keyDetail}}" class="detail">{{keyDetail}}</view>
+        <view wx:if="{{vm.note}}" class="formnote">{{vm.note}}</view>
+        <button wx:if="{{vm.note}}" class="btn primary" bindtap="goFree">自由练习 · 仅单字出题</button>
+      </block>
+    </view>
+  </block>
+</view>

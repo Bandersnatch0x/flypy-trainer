@@ -1,0 +1,27 @@
+.page { padding: 24rpx 28rpx 48rpx; }
+.sec { font-size: 26rpx; color: var(--ghost); margin: 28rpx 0 16rpx; }
+.card { background: var(--surface); border: 2rpx solid var(--stroke); border-radius: 16rpx; }
+
+.drop { padding: 40rpx 24rpx; display: flex; flex-direction: column; align-items: center; gap: 12rpx; border-style: dashed; }
+.d1 { font-size: 28rpx; color: var(--accent); }
+.d2 { font-size: 22rpx; color: var(--ghost); text-align: center; }
+
+.report { margin-top: 16rpx; display: flex; flex-direction: column; gap: 8rpx; }
+.line { font-size: 24rpx; color: var(--text); line-height: 1.5; }
+.line.bad { color: var(--err); }
+.line.note { color: var(--ghost); }
+.fname { font-weight: 600; }
+
+.lib { display: flex; justify-content: space-between; align-items: center; padding: 24rpx; margin-bottom: 12rpx; }
+.info { display: flex; flex-direction: column; gap: 6rpx; }
+.lname { font-size: 28rpx; }
+.lsub { font-size: 22rpx; color: var(--ghost); }
+
+.btn { font-size: 26rpx; padding: 12rpx 28rpx; border-radius: 10rpx; background: var(--surface); color: var(--text); border: 2rpx solid var(--stroke); }
+.btn.primary { background: rgba(0, 242, 255, 0.12); border-color: var(--accent); color: var(--accent); }
+.btn.ghost { color: var(--ghost); }
+.btn[disabled] { color: var(--ghost); background: var(--surface); }
+
+.custom { padding: 24rpx; display: flex; flex-direction: column; gap: 16rpx; }
+.custom textarea { min-height: 120rpx; font-size: 28rpx; }
+.empty { color: var(--ghost); font-size: 26rpx; padding: 16rpx 0; }

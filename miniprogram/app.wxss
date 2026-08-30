@@ -1,0 +1,28 @@
+/* Obsidian Focus 设计令牌（Stitch 设计稿定稿配色，用户已确认） */
+page {
+  --bg: #131313;
+  --surface: #1A1A1A;
+  --stroke: #2A2A2A;
+  --accent: #00F2FF;
+  --ok: #00E676;
+  --err: #FF1744;
+  --text: rgba(255, 255, 255, 0.92);
+  --ghost: #4A4A4A;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-size: 28rpx;
+}
+
+.card {
+  background: var(--surface);
+  border: 2rpx solid var(--stroke);
+  border-radius: 16rpx;
+}
+.mono {
+  font-family: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+}
+.accent { color: var(--accent); }
+.ok { color: var(--ok); }
+.err { color: var(--err); }
+.ghost { color: var(--ghost); }
