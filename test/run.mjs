@@ -714,10 +714,11 @@ eq('wubi rootHint 候选表 = 总表数据', wb.rootHint('g'), `此键字根：$
 eq('wubi rootHint 25 键皆有、Z 无', [...'abcdefghijklmnopqrstuvwxy'].every(k => wb.rootHint(k).startsWith('此键字根：')) && wb.rootHint('z') === '', true);
 eq('仓颉无 rootHint（走字根名引导，非兜底形态）', cj.rootHint, undefined);
 
-// -- 课程形态边界（验收条目 11：无课程阶/无 SRS 操练/不入七日挑战）--
+// -- 课程形态边界（验收条目 11：字根总表+自由练习，无操练阶/不入七日挑战）--
 const wbCourse = courseOf('wubi86');
-eq('wubi 课程形态 = 字根总表页', [wbCourse.form, wbCourse.name, wbCourse.sub], ['rootTable', '字根总表', '25 键 × 键上字根 · 自由练习仅单字']);
-eq('wubi 无课程阶', wbCourse.stages, []);
+eq('wubi 课程形态 = 字根总表（单阶形态，不入挑战）', [wbCourse.form, wbCourse.noChallenge], ['rootTable', true]);
+eq('wubi 仅字根总表一阶（无操练/词组/易错阶）', [wbCourse.stages.map(s => s.kind), wbCourse.stages[0].name], [['rootTable'], '字根总表']);
+eq('wubi 总表阶无对应会话模式（课程不出题）', stageModes(wbCourse.stages[0]), []);
 eq('wubi 无易混对供给', wbCourse.confus, []);
 eq('wubi 不入七日挑战（谓词空态）', [wbCourse.challenge, wbCourse.challengeSub], [[], '']);
 eq('wubi 页面数据挂字根总表（渲染器读课程数据）', [wbCourse.zones === WB_ZONES, wbCourse.roots === WB_ROOTS], [true, true]);

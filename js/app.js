@@ -234,7 +234,7 @@ function showEmptyBoard(filteredOut) {
     : mode === 'personal' ? '还没有导入词库 —— 去「导入」页添加你的词库，或换别的模式'
     : mode.startsWith('weak:') ? '该键还没有练习数据 —— 先练几轮'
     : mode === 'mistakes' ? '错词本是空的 —— 先去练一轮'
-    : filteredOut && scheme.paradigm === 'shape' ? `${scheme.name}取题仅单字 —— 多字词与整句不取题，换个模式试试`
+    : filteredOut && scheme.paradigm === 'shape' ? `${scheme.name}仅取单字出题 —— 多字词与整句不取题，换个模式试试`
     : '这个模式在当前方案下暂无可练内容 —— 换别的模式试试';
   if (packMissing) {
     const btn = document.createElement('button');
@@ -587,10 +587,6 @@ function renderCourse() {
   const course = courseOf(scheme.id);
   const ol = $('stages');
   ol.innerHTML = '';
-  if (course.form === 'rootTable') { // 五笔 86 降级形态：课程视图内只一页字根总表（〔规格推断〕8，issue #6）
-    renderRootsPage(course);
-    return;
-  }
   course.stages.forEach((st, i) => {
     const li = document.createElement('li');
     li.innerHTML = `<span>${i + 1}. ${st.name}<small>${st.sub}</small></span>`;
@@ -598,30 +594,33 @@ function renderCourse() {
     li.onclick = () => { stageIdx = i; store.setCourse(scheme.id, { stage: i }); renderCourse(); };
     ol.appendChild(li);
   });
-  // 七日挑战卡（谓词读范式课程数据，〔规格推断〕6）
-  const card = document.createElement('li');
-  card.className = 'challenge';
-  const st = challengeState();
-  if (!st) {
-    card.innerHTML = `<span>七日挑战<small>${course.challengeSub}</small></span>`;
-    card.onclick = () => { store.startChallenge(); toast(`七日挑战开始！今天：${course.challenge[0].label}`); renderCourse(); };
-  } else {
-    const today = Math.min(6, Math.floor((Date.now() - store.getChallenge().start) / 86400000));
-    card.innerHTML = `<span>七日挑战 · 第 ${today + 1} 天：${st[today].label}<small>${st.map(d => d.done ? '✓' : '·').join(' ')}</small></span>`;
+  // 七日挑战卡（谓词读范式课程数据，〔规格推断〕6）；降级形态（五笔 86）不入挑战——
+  // 不渲染挑战卡，形态边界由字根总表页内空态文案直陈（issue #6）
+  if (!course.noChallenge) {
+    const card = document.createElement('li');
+    card.className = 'challenge';
+    const st = challengeState();
+    if (!st) {
+      card.innerHTML = `<span>七日挑战<small>${course.challengeSub}</small></span>`;
+      card.onclick = () => { store.startChallenge(); toast(`七日挑战开始！今天：${course.challenge[0].label}`); renderCourse(); };
+    } else {
+      const today = Math.min(6, Math.floor((Date.now() - store.getChallenge().start) / 86400000));
+      card.innerHTML = `<span>七日挑战 · 第 ${today + 1} 天：${st[today].label}<small>${st.map(d => d.done ? '✓' : '·').join(' ')}</small></span>`;
+    }
+    ol.appendChild(card);
   }
-  ol.appendChild(card);
 
   const body = $('stageBody');
   body.innerHTML = '';
   renderStage(body, course.stages[stageIdx]);
 }
 
-// 降级形态课程视图：字根总表页（五笔 86，issue #6）——无课程阶/无 SRS/不入七日挑战，
+// 降级形态课程视图：字根总表页（五笔 86，issue #6）——无 SRS 操练、不入七日挑战，
 // 页面自带形态边界空态；自由练习从本页直达单字取题（§2/§4.1 五笔列、§5.1）
-function renderRootsPage(course) {
-  const body = $('stageBody');
-  body.innerHTML = `<h3>${esc(course.name)}</h3><p class="sub">${esc(course.sub)}</p>
-    <p>${esc(course.body)}</p>
+function renderRootsPage(body, st) {
+  const course = courseOf(scheme.id);
+  body.innerHTML = `<h3>${esc(st.name)}</h3><p class="sub">${esc(st.sub)}</p>
+    <p>${esc(st.body)}</p>
     <div class="kbmap" id="kbmap"></div>
     <div class="rootdetail" id="rootdetail"><p class="sub">点击任意键或下方键位，查看键上字根与例字。</p></div>
     <div class="rootcats" id="rootcats"></div>
@@ -665,7 +664,8 @@ function renderRootsPage(course) {
 }
 
 function renderStage(body, st) {
-  if (st.kind === 'keys') renderStageKeys(body, st);
+  if (st.kind === 'rootTable') renderRootsPage(body, st); // 五笔 86 降级形态：字根总表页（issue #6）
+  else if (st.kind === 'keys') renderStageKeys(body, st);
   else if (st.kind === 'drill') renderStageDrill(body, st);
   else if (st.kind === 'mistakes') renderStageMistakes(body, st);
   else renderStagePractice(body, st);

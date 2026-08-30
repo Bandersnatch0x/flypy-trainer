@@ -4,9 +4,10 @@
 // 每方案一份课程数据；每阶 = 课程数据 + 通用渲染器（渲染在 js/app.js，不含范式分支）。
 // {
 //   scheme: string,            // 方案 id
-//   form?: 'rootTable',        // 降级形态（五笔 86，issue #6）：无课程阶/无 SRS/不入七日挑战——
-//                              //   stages/confus/challenge 显式空；课程视图 = 字根总表页（〔规格推断〕8），
-//                              //   zones/roots 挂字根总表数据，渲染器直读（见 js/app.js renderRootsPage）
+//   form?: 'rootTable',        // 降级形态（五笔 86，issue #6）：单阶课程 = 字根总表页（〔规格推断〕8）——
+//                              //   stages 恰一阶 kind:'rootTable'（渲染器 js/app.js renderRootsPage，
+//                              //   zones/roots 挂字根总表数据）；无 SRS 操练、不入七日挑战
+//                              //   （noChallenge → 挑战卡不渲染，形态边界由页内空态直陈）、无易混对供给
 //   challengeSub: string,      // 七日挑战卡副标文案
 //   stages: [                  // 恰 5 阶，形状固定；公共字段 name（阶名）/ sub（副标题）/ body（正文，'{n}'=错词数占位）
 //     // kind='keys'     键位图认知/诊断：{view:'map'} 键位说明图 | {view:'heat'} 弱键热力图（点键即弱键特训）
@@ -21,6 +22,7 @@
 //     // kind='practice' 池取题练习：{pools:['chars'|'words2'|'words34'|'sentences'], seq?:'len'}，多池合并；
 //     //                 会话模式名 = pools 以 '+' 连接（+'@'+seq）；seq:'len'=轮内按码长升序（先简字后满码，#5）
 //     // kind='mistakes' 错词本取题（无额外字段；会话模式名 'mistakes'）
+//     // kind='rootTable' 字根总表页（五笔 86 降级形态，#6）：无额外字段、无会话模式；渲染器读课程 zones/roots
 //     // drill 阶会话模式名恒为 'finaldrill'
 //   ],
 //   confus: [                  // 易混对（范式供给；练习页模式按钮与取题过滤皆由此驱动）
@@ -214,14 +216,18 @@ const QUICK_COURSE = {
 };
 
 // ---- 五笔 86（降级形态，§2/§4.1 五笔列，issue #6）----
-// 课程视图内只有一页：字根总表（25 键 × 键上字根，五区分组）+ 自由练习直达（仅单字出题）。
-// 形态边界显式空态：无课程阶（stages=[]）、无 SRS 操练、不入七日挑战（challenge=[]）、无易混对供给。
+// 课程视图内只有一阶：字根总表（25 键 × 键上字根，五区分组）+ 自由练习直达（仅单字出题）。
+// 形态边界显式空态：无 SRS 操练阶、不入七日挑战（noChallenge → 挑战卡空态）、无易混对供给；
+// 五阶课程缺位由单阶形态直陈（页内空态文案）。
 const WUBI_COURSE = {
-  scheme: 'wubi86', form: 'rootTable',
-  name: '字根总表', sub: '25 键 × 键上字根 · 自由练习仅单字',
-  body: '五笔 86 的码取自字根：25 个取码键按「横、竖、撇、捺、折」五区排布，每键承载一组字根。先认键——点击任意键查看键上字根与例字（例字码随资料包派生）；再到练习页自由练习：仅单字出题，全提示会给出整条键序，并展开当前键的字根候选表。',
+  scheme: 'wubi86', form: 'rootTable', noChallenge: true,
+  challengeSub: '',
+  stages: [
+    { kind: 'rootTable', name: '字根总表', sub: '25 键 × 键上字根 · 自由练习仅单字',
+      body: '五笔 86 的码取自字根：25 个取码键按「横、竖、撇、捺、折」五区排布，每键承载一组字根。先认键——点击任意键查看键上字根与例字（例字码随资料包派生）；再到练习页自由练习：仅单字出题，全提示会给出整条键序，并展开当前键的字根候选表。' },
+  ],
+  confus: [], challenge: [],
   zones: WB_ZONES, roots: WB_ROOTS,
-  stages: [], confus: [], challenge: [], challengeSub: '',
 };
 
 export const COURSES = {
