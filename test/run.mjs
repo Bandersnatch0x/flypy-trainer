@@ -446,7 +446,7 @@ eq('prefetch 命中 pack 地址', fetchLog, ['/data/packs/cangjie5.v1.json']);
 eq('prefetch 拒绝未知包', (await prefetchPacks(['nope'])).ok, false);
 
 // ---- v3 #3：课程数据化（SPEC-0003 §4.1 / §8 缺口 1，验收条目 9/12）----
-const { COURSES, courseOf, syllablesOf, confusKeys, confusEndsMatch, stageModes, challengeMatch } = await import('../js/courses.js');
+const { COURSES, courseOf, syllablesOf, confusKeys, confusEndsMatch, stageModes, challengeMatch, setWubiCourseReady } = await import('../js/courses.js');
 
 // -- schema 完整性：每方案一份、恰五阶、形状固定（供 #4/#5 依样产出）--
 eq('注册表十方案皆有课程数据', Object.keys(SCHEMES).every(id => COURSES[id] && COURSES[id].scheme === id), true);
@@ -962,9 +962,14 @@ eq('wubi rootHint 候选表 = 总表数据', wb.rootHint('g'), `此键字根：$
 eq('wubi rootHint 25 键皆有、Z 无', [...'abcdefghijklmnopqrstuvwxy'].every(k => wb.rootHint(k).startsWith('此键字根：')) && wb.rootHint('z') === '', true);
 eq('仓颉无 rootHint（走字根名引导，非兜底形态）', cj.rootHint, undefined);
 
-// -- 课程形态（SPEC-0004 §5.5 升级：五阶课程，#13；细目断言见文末 #13 专节）--
+// -- 课程形态（SPEC-0004 §5.5 升级，#13）：拆解课程包未就绪 = 现役降级形态（v3/#6）；
+//    setWubiCourseReady() 翻转五阶（收尾轨接真包时调用；细目断言见文末 #13 专节）--
+const wbCourseDegraded = courseOf('wubi86');
+eq('wubi 默认降级形态（包未就绪：字根总表单阶、无挑战）',
+  [wbCourseDegraded.form, wbCourseDegraded.noChallenge, wbCourseDegraded.stages.length], ['rootTable', true, 1]);
+setWubiCourseReady();
 const wbCourse = courseOf('wubi86');
-eq('wubi 课程升级完整五阶（降级 form 字段去除）', [wbCourse.form, wbCourse.noChallenge, wbCourse.stages.length], [undefined, undefined, 5]);
+eq('wubi 就绪翻转完整五阶（降级 form 字段去除）', [wbCourse.form, wbCourse.noChallenge, wbCourse.stages.length], [undefined, undefined, 5]);
 eq('wubi 五阶形态齐（字根认知/拆字操练/单字拆打/词组/易错）', wbCourse.stages.map(s => s.kind), ['keys', 'drill', 'practice', 'practice', 'mistakes']);
 eq('wubi 认知阶无对应会话模式（视图阶不出题）', stageModes(wbCourse.stages[0]), []);
 eq('wubi 入七日挑战（谓词七条 + 副标在案）', [wbCourse.challenge.length, wbCourse.challengeSub.length > 0], [7, true]);

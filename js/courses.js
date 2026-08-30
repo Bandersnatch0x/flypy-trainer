@@ -354,6 +354,22 @@ const WUBI_COURSE = {
   ],
 };
 
+// 降级形态（v3/#6）：拆解课程包未就绪前的现役形态 — 单阶字根总表页、无挑战、空态直陈。
+// M3 收尾轨把真包接上后调 setWubiCourseReady() 翻转（SPEC-0004 §5.1-M3 文案翻转同批）。
+const WUBI_DEGRADED = {
+  scheme: 'wubi86', form: 'rootTable', noChallenge: true,
+  challengeSub: '',
+  stages: [
+    { kind: 'rootTable', name: '字根总表', sub: '25 键 × 键上字根 · 自由练习仅单字',
+      body: '五笔 86 的码取自字根：25 个取码键按「横、竖、撇、捺、折」五区排布，每键承载一组字根。先认键——点击任意键查看键上字根与例字（例字码随资料包派生）；再到练习页自由练习：仅单字出题，全提示会给出整条键序，并展开当前键的字根候选表。' },
+  ],
+  confus: [], challenge: [],
+  zones: WB_ZONES, roots: WB_ROOTS,
+};
+let wubiCourseReadyFlag = false;
+export function setWubiCourseReady(v = true) { wubiCourseReadyFlag = !!v; }
+export function wubiCourseReady() { return wubiCourseReadyFlag; }
+
 export const COURSES = {
   flypy: shuangpinCourse('flypy'),
   mspy: shuangpinCourse('mspy'),
@@ -366,7 +382,7 @@ export const COURSES = {
   cangjie: CANGJIE_COURSE,
   quick: QUICK_COURSE,
   stroke: STROKE_COURSE,
-  wubi86: WUBI_COURSE,
+  get wubi86() { return wubiCourseReadyFlag ? WUBI_COURSE : WUBI_DEGRADED; },
 };
 export function courseOf(schemeId) { return COURSES[schemeId] || COURSES.flypy; }
 
