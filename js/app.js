@@ -659,6 +659,28 @@ function renderCourse() {
   renderStage(body, course.stages[stageIdx]);
 }
 
+// 字根分区芯片组（字根总表页与形码字根认知视图共用，#9 收口）：
+// groups=[{label, desc?, keys}]，芯片标签随当前方案键帽派生，点击回调 pick
+function renderRootChips(cats, groups, pick) {
+  for (const g of groups || []) {
+    const sec = document.createElement('div');
+    sec.className = 'rootcat';
+    sec.innerHTML = `<b>${esc(g.label)}</b>${g.desc ? ` <span class="sub">${esc(g.desc)}</span>` : ''}`;
+    const row = document.createElement('div');
+    row.className = 'rootrow';
+    for (const k of g.keys) {
+      const b = document.createElement('button');
+      b.className = 'btn ghost rootchip';
+      const lab = scheme.layout.keyLabel(k);
+      b.innerHTML = `${esc(lab.main)}<small>${esc(lab.sub)}</small>`;
+      b.onclick = () => pick(k);
+      row.appendChild(b);
+    }
+    sec.appendChild(row);
+    cats.appendChild(sec);
+  }
+}
+
 // 降级形态课程视图：字根总表页（五笔 86，issue #6）——无 SRS 操练、不入七日挑战，
 // 页面自带形态边界空态；自由练习从本页直达单字取题（§2/§4.1 五笔列、§5.1）
 function renderRootsPage(body, st) {
@@ -686,24 +708,7 @@ function renderRootsPage(body, st) {
       ${exHtml ? `<p class="rootexwrap">例字（码随资料包派生）：${exHtml}</p>` : ''}`;
   };
   buildKeyboard($('kbmap'), { map: true, onKey: pick });
-  const cats = $('rootcats');
-  for (const g of course.zones || []) {
-    const sec = document.createElement('div');
-    sec.className = 'rootcat';
-    sec.innerHTML = `<b>${esc(g.label)}</b>${g.desc ? ` <span class="sub">${esc(g.desc)}</span>` : ''}`;
-    const row = document.createElement('div');
-    row.className = 'rootrow';
-    for (const k of g.keys) {
-      const b = document.createElement('button');
-      b.className = 'btn ghost rootchip';
-      const lab = scheme.layout.keyLabel(k);
-      b.innerHTML = `${esc(lab.main)}<small>${esc(lab.sub)}</small>`;
-      b.onclick = () => pick(k);
-      row.appendChild(b);
-    }
-    sec.appendChild(row);
-    cats.appendChild(sec);
-  }
+  renderRootChips($('rootcats'), course.zones, pick);
   $('goFree').onclick = () => gotoPractice('chars');
 }
 
@@ -739,24 +744,7 @@ function renderStageKeys(body, st) {
         ${exHtml ? `<p class="rootexwrap">例字（码随当前方案派生）：${exHtml}</p>` : ''}`;
     };
     buildKeyboard($('kbmap'), { map: true, onKey: pick });
-    const cats = $('rootcats');
-    for (const g of st.groups || []) {
-      const sec = document.createElement('div');
-      sec.className = 'rootcat';
-      sec.innerHTML = `<b>${esc(g.label)}</b>${g.desc ? ` <span class="sub">${esc(g.desc)}</span>` : ''}`;
-      const row = document.createElement('div');
-      row.className = 'rootrow';
-      for (const k of g.keys) {
-        const b = document.createElement('button');
-        b.className = 'btn ghost rootchip';
-        const lab = scheme.layout.keyLabel(k);
-        b.innerHTML = `${esc(lab.main)}<small>${esc(lab.sub)}</small>`;
-        b.onclick = () => pick(k);
-        row.appendChild(b);
-      }
-      sec.appendChild(row);
-      cats.appendChild(sec);
-    }
+    renderRootChips($('rootcats'), st.groups, pick);
     return;
   }
   if (st.view === 'heat') {

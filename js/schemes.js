@@ -13,6 +13,47 @@ import { bindPack } from './packs.js';
 const ROWS3 = ['qwertyuiop', 'asdfghjkl', 'zxcvbnm'];
 const ID = { i: 'i', u: 'u', v: 'v' };
 
+// ---- 拼音派生公共件（双拼族与全拼共用，#9 收口）----
+// 拼音串 → 音节列表（去空白后整串切分，退化按空格兜底）；空串 → null
+const sylsOf = (py) => {
+  const s = String(py || '').trim();
+  if (!s) return null;
+  return splitPinyin(s.replace(/\s+/g, '')) || s.split(/\s+/).filter(Boolean);
+};
+
+// 音节级键序骨架 → 扁平编码：planSyllable(syl) → [{key,...}]，任一音节不可派生则整体 null
+const codeOfPyEntry = (entry, planSyllable) => {
+  if (!entry) return null;
+  const syls = sylsOf(entry.py);
+  if (!syls || !syls.length) return null;
+  let code = '';
+  for (const s of syls) {
+    const ks = planSyllable(s);
+    if (!ks) return null;
+    code += ks.map(k => k.key).join('');
+  }
+  return code || null;
+};
+
+// 键序骨架 → plan：按音节分组 {keys, groups:[{syl,start,len}]}；
+// 无拼音可查时退化为逐码键（note 恒空，角标由布局键帽派生）
+const planOfPyEntry = (code, entry, planSyllable) => {
+  const keys = [];
+  const groups = [];
+  const syls = entry && entry.py ? sylsOf(entry.py) : null;
+  if (syls && syls.length) {
+    for (const s of syls) {
+      const ks = planSyllable(s);
+      if (!ks) return { keys: [], groups: [] };
+      groups.push({ syl: s, start: keys.length, len: ks.length });
+      keys.push(...ks);
+    }
+  } else {
+    for (const ch of String(code || '')) keys.push({ key: ch, label: ch.toUpperCase(), note: '', role: '码键' });
+  }
+  return { keys, groups };
+};
+
 // ---- 音码（双拼族）工厂 ----
 function makeScheme(cfg) {
   // 单音节 → 扁平键序（双拼 = 两键，仅本实现内部成立）
@@ -52,45 +93,15 @@ function makeScheme(cfg) {
     ];
   };
 
-  const sylsOf = (py) => {
-    const s = String(py || '').trim();
-    if (!s) return null;
-    return splitPinyin(s.replace(/\s+/g, '')) || s.split(/\s+/).filter(Boolean);
-  };
-
   const codeOf = (entry) => {
-    if (!entry) return null;
     // srcCode 直用是能力位（当前仅小鹤开）：服务 custom_phrase 类无拼音词目与 Rime 导出
-    if (cfg.acceptSrcCode && entry.srcCode && (!entry.srcScheme || entry.srcScheme === cfg.id)) {
+    if (cfg.acceptSrcCode && entry && entry.srcCode && (!entry.srcScheme || entry.srcScheme === cfg.id)) {
       return String(entry.srcCode).toLowerCase();
     }
-    const syls = sylsOf(entry.py);
-    if (!syls || !syls.length) return null;
-    let code = '';
-    for (const s of syls) {
-      const ks = planSyllable(s);
-      if (!ks) return null;
-      code += ks.map(k => k.key).join('');
-    }
-    return code || null;
+    return codeOfPyEntry(entry, planSyllable);
   };
 
-  const planOf = (code, entry) => {
-    const keys = [];
-    const groups = [];
-    const syls = entry && entry.py ? sylsOf(entry.py) : null;
-    if (syls && syls.length) {
-      for (const s of syls) {
-        const ks = planSyllable(s);
-        if (!ks) return { keys: [], groups: [] };
-        groups.push({ syl: s, start: keys.length, len: ks.length });
-        keys.push(...ks);
-      }
-    } else {
-      for (const ch of String(code || '')) keys.push({ key: ch, label: ch.toUpperCase(), note: '', role: '码键' });
-    }
-    return { keys, groups };
-  };
+  const planOf = (code, entry) => planOfPyEntry(code, entry, planSyllable);
 
   // 键帽小字：韵母反查（派生自表，不再有全局硬编码）
   const ymAt = {};
@@ -113,6 +124,7 @@ function makeScheme(cfg) {
 }
 
 // ---- 全拼：码即拼音本身，变长键序（2–6 键/音节），无新码表 ----
+// codeOf/planOf 走拼音派生公共件（与双拼族同骨架，#9 收口），仅 planSyllable 为全拼特有
 function makeQuanpin() {
   const planSyllable = (sylIn) => {
     const syl = normalizeSyllable(sylIn);
@@ -123,35 +135,8 @@ function makeQuanpin() {
       key: ch, label: ch.toUpperCase(), note: '', role: i < smLen ? 'sm' : 'ym',
     }));
   };
-  const codeOf = (entry) => {
-    if (!entry || !entry.py) return null;
-    const syls = splitPinyin(String(entry.py).replace(/\s+/g, '')) || String(entry.py).trim().split(/\s+/).filter(Boolean);
-    let code = '';
-    for (const s of syls) {
-      const ks = planSyllable(s);
-      if (!ks) return null;
-      code += ks.map(k => k.key).join('');
-    }
-    return code || null;
-  };
-  const planOf = (code, entry) => {
-    const keys = [];
-    const groups = [];
-    const syls = entry && entry.py
-      ? (splitPinyin(String(entry.py).replace(/\s+/g, '')) || String(entry.py).trim().split(/\s+/).filter(Boolean))
-      : null;
-    if (syls && syls.length) {
-      for (const s of syls) {
-        const ks = planSyllable(s);
-        if (!ks) return { keys: [], groups: [] };
-        groups.push({ syl: s, start: keys.length, len: ks.length });
-        keys.push(...ks);
-      }
-    } else {
-      for (const ch of String(code || '')) keys.push({ key: ch, label: ch.toUpperCase(), note: '', role: '码键' });
-    }
-    return { keys, groups };
-  };
+  const codeOf = (entry) => codeOfPyEntry(entry, planSyllable);
+  const planOf = (code, entry) => planOfPyEntry(code, entry, planSyllable);
   return {
     id: 'quanpin', name: '全拼', paradigm: 'phonetic',
     codeOf, planOf,
