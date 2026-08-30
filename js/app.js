@@ -4,6 +4,7 @@ import { courseOf, confusKeys, confusEndsMatch, syllablesOf, challengeMatch } fr
 import { sniffAndParse, mergeEntries, weightedSample, parsePlain } from './parsers.js';
 import { store, migrate } from './store.js';
 import { PACKS as DATA_PACKS, packState } from './packs.js';
+import { planUnitAt } from './jyutping.js';
 import { sound } from './sound.js';
 import { downloadShareCard } from './share.js';
 import { renderSchemeLibrary, initSchemeChip, hiddenModesFor, schemeHelpOf } from './schemes-ui.js';
@@ -257,7 +258,7 @@ function showEmptyBoard(filteredOut) {
   $('word').textContent = '∅';
   $('hint').textContent = '';
   $('guide').textContent = packMissing ? `${DATA_PACKS[scheme.packId].name}未就绪 —— 网络就绪后可重试加载`
-    : mode === 'personal' && filteredOut && scheme.id === 'zhuyin' ? '导入词暂无声调数据 —— 注音按词级声调表出题，导入词暂未覆盖；可切回拼音方案练导入词'
+    : mode === 'personal' && filteredOut && (scheme.id === 'zhuyin' || scheme.id === 'jyutping') ? `导入词暂无声调数据 —— ${scheme.name}按词级声调表出题，导入词暂未覆盖；可切回拼音方案练导入词`
     : mode === 'personal' ? '还没有导入词库 —— 去「导入」页添加你的词库，或换别的模式'
     : mode.startsWith('weak:') ? '该键还没有练习数据 —— 先练几轮'
     : mode === 'mistakes' ? '错词本是空的 —— 先去练一轮'
@@ -300,16 +301,18 @@ function updateHighlight(p) {
   clearKeys();
   $('guide').innerHTML = '';
   if (hintLevel === 'none' || !settings.hlKeys) return;
-  const cur = planKeys[p];
-  if (!cur) return;
-  const after = planKeys[p + 1];
+  // plan 单元寻址（span 感知）：粤拼阳调双敲为单一连击单元（span=2），既有方案 span=1 行为不变
+  const at = planUnitAt(planKeys, p);
+  if (!at) return;
+  const cur = at.unit;
+  const after = planKeys[at.index + 1];
   if (keyEls[cur.key]) {
     keyEls[cur.key].classList.add('smhi');
-    keyEls[cur.key].dataset.n = String(p + 1);
+    keyEls[cur.key].dataset.n = String(at.index + 1);
   }
   if (after && after.key !== cur.key && keyEls[after.key]) {
     keyEls[after.key].classList.add('ymhi');
-    keyEls[after.key].dataset.n = String(p + 2);
+    keyEls[after.key].dataset.n = String(at.index + 2);
   }
   if (hintLevel === 'full') {
     let html = guideText();
@@ -555,9 +558,9 @@ function onInput() {
     setTimeout(() => inbox.classList.remove('shake'), 130);
     const el = keyEls[ch];
     if (el) { el.classList.add('errflash'); setTimeout(() => el.classList.remove('errflash'), 120); }
-    const want = planKeys[pos];
-    const note = want && want.note ? `（${want.note}）` : '';
-    $('fb').textContent = want ? `第 ${pos + 1} 步应是 ${want.label}${note}` : '';
+    const want = planUnitAt(planKeys, pos);
+    const note = want && want.unit.note ? `（${want.unit.note}）` : '';
+    $('fb').textContent = want ? `第 ${want.index + 1} 步应是 ${want.unit.label}${note}` : '';
   }
   updateAcc();
 }

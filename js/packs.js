@@ -9,6 +9,7 @@ export const PACKS = {
   wubi86:   { url: '/data/packs/wubi86.v1.json',       name: '五笔 86 字码表',  kb: 82 },
   cangjie5: { url: '/data/packs/cangjie5.v1.json',     name: '仓颉单字码表',    kb: 269 },
   zhuyin:   { url: '/data/packs/zhuyin-tones.v1.json', name: '注音带调数据',    kb: 33 },
+  jyutping: { url: '/data/packs/jyutping-tones.v1.json', name: '粤拼带调数据',  kb: 34 },
 };
 
 const mem = new Map();      // id → 表（就绪后内存常驻）

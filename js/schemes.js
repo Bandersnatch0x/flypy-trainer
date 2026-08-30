@@ -6,6 +6,7 @@
 // 键位表译自 iDvel/rime-ice 与 rime-double-pinyin 官方 schema algebra 段（ADR-0005），自写表。
 import { normalizeSyllable, splitSyllable, splitPinyin, YM as FLYPY_YM, SM_KEYS as FLYPY_SM, SM_NAME as FLYPY_SMN } from './flypy.js';
 import { ZY_ROWS, ZY_EXTRA_KEYS, ZM_OF_KEY, TONE_MARKS, toZhuyin, keysOfToned, planOfToned } from './zhuyin.js';
+import { keysOfToned as jpKeysOfToned, planOfToned as jpPlanOfToned, JP_SM_KEYS, JP_YM_KEYS } from './jyutping.js';
 import { CJ_LETTERS, quickOf } from './cangjie.js';
 import { WB_ROOTS } from './wubi.js';
 import { bindPack } from './packs.js';
@@ -220,6 +221,72 @@ function makeZhuyin() {
   return bindPack(scheme, 'zhuyin');
 }
 
+// ---- 粤拼：带调字表查询 + 近恒等派生（SPEC-0004 §2，issue #10）----
+// 带调粤拼来自 jyutping-tones pack（activate() 懒加载，表落 scheme.table；构建期简繁桥后
+// 以简体为键，运行时零映射）。码 = 字母串即键序 + 六调键收尾（1→v 2→x 3→q；阳调 4/5/6
+// 同键双敲，plan 为单一连击单元）；displayOf = 带调粤拼串。标准 26 键零布局。
+function makeJyutping() {
+  const tonedSylsOf = (entry) => {
+    const toned = entry && entry.word && scheme.table ? scheme.table[entry.word] : null;
+    return toned ? String(toned).split(' ') : null;
+  };
+  const codeOf = (entry) => {
+    const syls = tonedSylsOf(entry);
+    if (!syls) return null; // 表未就绪或缺字 → 不可出题，引擎过滤（§3.1）
+    let code = '';
+    for (const s of syls) {
+      const ks = jpKeysOfToned(s);
+      if (!ks) return null;
+      code += ks;
+    }
+    return code || null;
+  };
+  const planOf = (code, entry) => {
+    const keys = [];
+    const groups = [];
+    const syls = tonedSylsOf(entry);
+    if (syls) {
+      for (const s of syls) {
+        const ks = jpPlanOfToned(s);
+        if (!ks) return { keys: [], groups: [] };
+        groups.push({ syl: s, start: keys.length, len: ks.reduce((n, k) => n + (k.span || 1), 0) });
+        keys.push(...ks);
+      }
+    } else {
+      for (const ch of String(code || '')) keys.push({ key: ch, label: ch.toUpperCase(), note: '', role: '码键' });
+    }
+    return { keys, groups };
+  };
+  // 提示文案码文本：带调粤拼串（如 nei5 hou2，§2.3）
+  const displayOf = (entry) => {
+    const syls = tonedSylsOf(entry);
+    return syls ? syls.join(' ') : null;
+  };
+  const toneTitle = {
+    v: '声调键 · 阴平调 1 单按 / 阳平调 4 同键连按两下',
+    x: '声调键 · 阴上调 2 单按 / 阳上调 5 同键连按两下',
+    q: '声调键 · 阴去调 3 单按 / 阳去调 6 同键连按两下',
+  };
+  const toneSub = { v: '调1/4', x: '调2/5', q: '调3/6' };
+  const keyLabel = (ch) => {
+    if (toneTitle[ch]) return { main: ch.toUpperCase(), sub: toneSub[ch], title: toneTitle[ch] };
+    const sm = JP_SM_KEYS.includes(ch), ym = JP_YM_KEYS.includes(ch);
+    const role = sm && ym ? '声母/韵母字母' : sm ? '声母字母' : ym ? '韵母字母' : '';
+    return { main: ch.toUpperCase(), sub: '', title: role ? `键 ${ch.toUpperCase()} · ${role}` : `键 ${ch.toUpperCase()}` };
+  };
+  const layout = {
+    ROWS: ROWS3, extraKeys: [],
+    keyLabel,
+    specialOf: () => '',
+  };
+  const scheme = {
+    id: 'jyutping', name: '粤拼', paradigm: 'phonetic',
+    codeOf, planOf, displayOf, layout,
+    YM: {}, SM_KEYS: {}, SM_NAME: {},
+  };
+  return bindPack(scheme, 'jyutping');
+}
+
 // ---- 形码（字表查询）：仓颉深教样板 + 速成官方变体（SPEC-0003 §2/§4，issue #5）----
 // 码逐字查 cangjie5.base 派生：仓颉=全码；速成=首尾二码运行时派生，零码表（官方规则）。
 // 取题仅单字（§3.4）：多字词/非仓颉表字返回 null，引擎过滤。
@@ -334,6 +401,7 @@ export const SCHEMES = {
   }),
   quanpin: makeQuanpin(),
   zhuyin: makeZhuyin(),
+  jyutping: makeJyutping(), // 粤拼：带调字表 + 六调键近恒等派生（SPEC-0004 §2，issue #10）
   cangjie: makeShapeScheme({ id: 'cangjie', name: '仓颉', derive: (full) => full }), // 深教样板（T3-D1/D2）
   quick: makeShapeScheme({ id: 'quick', name: '速成', derive: quickOf }), // 官方变体：首尾二码，复用全五阶（T3-D4）
   wubi86: makeWubi86(), // 降级形态：字根总表 + 自由练习（T3-D4，issue #6）
