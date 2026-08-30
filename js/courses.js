@@ -4,23 +4,28 @@
 // 每方案一份课程数据；每阶 = 课程数据 + 通用渲染器（渲染在 js/app.js，不含范式分支）。
 // {
 //   scheme: string,            // 方案 id
-//   form?: 'rootTable',        // 降级形态（五笔 86，issue #6）：单阶课程 = 字根总表页（〔规格推断〕8）——
+//   form?: 'rootTable',        // 降级形态：单阶课程 = 字根总表页（〔规格推断〕8）——
 //                              //   stages 恰一阶 kind:'rootTable'（渲染器 js/app.js renderRootsPage，
 //                              //   zones/roots 挂字根总表数据）；无 SRS 操练、不入七日挑战
-//                              //   （noChallenge → 挑战卡不渲染，形态边界由页内空态直陈）、无易混对供给
+//                              //   （noChallenge → 挑战卡不渲染，形态边界由页内空态直陈）、无易混对供给。
+//                              //   五笔 86 曾在该形态（#6），SPEC-0004 §5.5 已升级为完整五阶（#13），
+//                              //   此形状留作后续方案的降级底本
 //   challengeSub: string,      // 七日挑战卡副标文案
 //   stages: [                  // 恰 5 阶，形状固定；公共字段 name（阶名）/ sub（副标题）/ body（正文，'{n}'=错词数占位）
 //     // kind='keys'     键位图认知/诊断：{view:'map'} 键位说明图 | {view:'heat'} 弱键热力图（点键即弱键特训）
 //     //                 | {view:'roots'} 形码字根认知（#5）：{groups:[{label,desc,keys}], letters:{键:{name,forms?,ex?,note?,special?}}}
 //     //                 键帽主显字母、角标主字根，点键看字根例字（例字码按当前方案实时派生）；四类分区+特殊键单列
-//     // kind='drill'    间隔重复操练：{unit:'ymKey'|'syllable'|'symbol'|'letter', items?:string[], groups?:[{label, keys}], roots?:{键:字根字}}
+//     //                 （五笔 86 阶 0 挂 WB_ROOTS 总表、分区叙事 = 五区，SPEC-0004 §5.5）
+//     // kind='drill'    间隔重复操练：{unit:'ymKey'|'syllable'|'symbol'|'letter'|'wbkey', items?:string[], groups?:[{label, keys}], roots?:{键:字根字}}
 //     //                 ymKey=韵母键（按钮自方案 layout+YM 派生，省略 items）；
 //     //                 syllable=音节（items=高频音节清单，拼音串；SRS 单元即音节，维度不变）；
 //     //                 symbol=符号键（注音：groups 分组清单 声符→介符→韵符→声调键，SRS 单元=键，含声调键〔规格推断〕5；
 //     //                 粤拼：声母→韵母→六调键收尾，SRS 单元=字母键+调键 v/x/q，SPEC-0004 §7 推断 3；
 //     //                 五笔画：五笔画键一组，题型「笔画（或例字首笔）→ 在哪键」，全站最轻操练，SPEC-0004 §3.3）；
 //     //                 letter=仓颉字母键（形码 #5：groups=四类分组；SRS 单元=24 字母，X 不教 Z 非取码；
-//     //                 roots 供「字根 X 在哪键」一键题=字根本字；出字题打首码起的全码）
+//     //                 roots 供「字根 X 在哪键」一键题=字根本字；出字题打首码起的全码）；
+//     //                 wbkey=五笔 86 码键（#13：groups=五区分组；SRS 单元=25 码键，Z 学习键不入；
+//     //                 「字根形在哪键」+「出字问首码」，区位号 11–55 只进组文案助记，SPEC-0004 §5.5）
 //     // kind='practice' 池取题练习：{pools:['chars'|'words2'|'words34'|'sentences'], seq?:'len'}，多池合并；
 //     //                 会话模式名 = pools 以 '+' 连接（+'@'+seq）；seq:'len'=轮内按码长升序（先简字后满码，#5）
 //     // kind='mistakes' 错词本取题（无额外字段；会话模式名 'mistakes'）
@@ -300,19 +305,53 @@ const STROKE_COURSE = {
   ],
 };
 
-// ---- 五笔 86（降级形态，§2/§4.1 五笔列，issue #6）----
-// 课程视图内只有一阶：字根总表（25 键 × 键上字根，五区分组）+ 自由练习直达（仅单字出题）。
-// 形态边界显式空态：无 SRS 操练阶、不入七日挑战（noChallenge → 挑战卡空态）、无易混对供给；
-// 五阶课程缺位由单阶形态直陈（页内空态文案）。
+// ---- 五笔 86（五阶课程：字根认知 → 拆字操练 → 单字拆打 → 词组 2+2 → 易错，SPEC-0004 §5.5，issue #13）----
+// 阶 0 复用既有字根总表（25 键 × 键上字根，已过包校验）挂 view:'roots' 渲染，分区叙事 = 五区
+// （横竖撇捺折代仓颉四类）；阶 1 SRS 单元 = 25 码键（'wbkey'，Z 学习键不入）；
+// 阶 3 真词出题：二字词双字皆 ∈ 课程池才可出题，词码 = 各字全码前两键连打（2+2，
+// 运行时派生 ≈10 行，见 js/wubi.js wubiWordCode）；§3.4 对 wubi86 放宽「课程池二字词可出题」，
+// 仓颉/速成维持仅单字。拆解课程表经 js/wubi.js bindWubiCourse 注入（收尾轨接真包；单测注夹具）。
+const WB_ZONE_GROUPS = WB_ZONES.map(z => ({
+  label: `${z.label} · 区位 ${z.desc}`,
+  desc: [...z.keys].map(k => `${k.toUpperCase()} ${WB_ROOTS[k].name}`).join(' '),
+  keys: [...z.keys],
+}));
+const WB_LETTERS = Object.fromEntries(Object.entries(WB_ROOTS).map(([k, r]) =>
+  [k, { name: r.name, forms: r.roots, ex: r.ex, note: `${r.zone}区${r.pos}位${r.note ? ' · ' + r.note : ''}` }]));
+const WB_KEY_NAMES = Object.fromEntries(Object.entries(WB_ROOTS).map(([k, r]) => [k, r.name]));
+
 const WUBI_COURSE = {
-  scheme: 'wubi86', form: 'rootTable', noChallenge: true,
-  challengeSub: '',
+  scheme: 'wubi86', challengeSub: '每天一个小目标，七天练顺五笔拆字',
   stages: [
-    { kind: 'rootTable', name: '字根总表', sub: '25 键 × 键上字根 · 自由练习仅单字',
-      body: '五笔 86 的码取自字根：25 个取码键按「横、竖、撇、捺、折」五区排布，每键承载一组字根。先认键——点击任意键查看键上字根与例字（例字码随资料包派生）；再到练习页自由练习：仅单字出题，全提示会给出整条键序，并展开当前键的字根候选表。' },
+    { kind: 'keys', view: 'roots', groups: WB_ZONE_GROUPS, letters: WB_LETTERS,
+      name: '字根认知', sub: '25 键五区排布 · 点键看键上字根与例字',
+      body: '五笔 86 的码取自字根：25 个取码键按「横、竖、撇、捺、折」五区排布（区位号 11–55 是助记编号，不入码），每键承载一组字根；Z 是学习键，不参与取码。点击任意键查看键名、键上字根与例字（例字码随资料包派生）。' },
+    { kind: 'drill', unit: 'wbkey', groups: WB_ZONE_GROUPS, roots: WB_KEY_NAMES,
+      name: '拆字操练', sub: '字根形在哪键 · 出字问首码（间隔重复）',
+      body: '逐键间隔重复（SRS 单元 = 25 码键，Z 学习键不入）：一键题「字根形 X 在哪键」——一键多根是核心知识点，字根形到键的反表由字根总表派生；出字问首码（课程字的首根键），顺手把整条拆解打完。带 <b class="due-dot">●</b> 的键是到期待复习键（间隔重复调度）。' },
+    { kind: 'practice', pools: ['chars'], seq: 'len',
+      name: '单字拆打', sub: 'plan=拆解步骤 · 先简字后满码',
+      body: '从内置高频字池逐字出题，轮内按码长升序——先简字后满码。课程字按拆解表逐步引导：字根名＋键位，识别码步带「末笔 · 结构」注记，简码字附注简码级与全码；未入课程字走全码键序兜底（展开该键字根候选表）。建议先用「全提示」。' },
+    { kind: 'practice', pools: ['words2'],
+      name: '词组', sub: '真词出题 · 二字词 2+2 连打',
+      body: '真词出题：二字词双字皆在课程池才可出题，词码 = 各字全码前两键连打（2+2）——如 中国 = 中 KH + 国 LG → KHLG。课程池外的词自动过滤。三字及以上词组取码规则缓议。' },
+    CJ_MISTAKES_STAGE,
   ],
-  confus: [], challenge: [],
-  zones: WB_ZONES, roots: WB_ROOTS,
+  confus: [
+    { label: '日/目 · 形近字根', note: '日 在 J、目 在 H：两字形近键位不同，辨在框内横画连断', role: 'root', keys: ['j', 'h'] },
+    { label: '禾/木 · 形近字根', note: '禾 在 T、木 在 S：禾 比 木 多一撇头', role: 'root', keys: ['t', 's'] },
+    { label: '刀/力 · 形近字根', note: '刀 在 V、力 在 L：力 出头、刀 不出', role: 'root', keys: ['v', 'l'] },
+    { label: '儿/几 · 形近字根', note: '儿 在 Q、几 在 M：几 有顶横、儿 无', role: 'root', keys: ['q', 'm'] },
+  ],
+  challenge: [
+    { tag: 'D1', label: '任意一轮热身', match: { any: true } },
+    { tag: 'D2', label: '拆字操练一轮', match: { stage: 1 } },
+    { tag: 'D3', label: '单字拆打一轮', match: { stage: 2 } },
+    { tag: 'D4', label: '词组一轮', match: { stage: 3 } },
+    { tag: 'D5', label: '形近对抗一轮', match: { prefix: 'confus' } },
+    { tag: 'D6', label: '限时冲刺一轮', match: { modes: ['sprint'] } },
+    { tag: 'D7', label: '混合综合一轮', match: { modes: ['mixed'] } },
+  ],
 };
 
 export const COURSES = {

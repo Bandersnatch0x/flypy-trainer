@@ -962,14 +962,12 @@ eq('wubi rootHint 候选表 = 总表数据', wb.rootHint('g'), `此键字根：$
 eq('wubi rootHint 25 键皆有、Z 无', [...'abcdefghijklmnopqrstuvwxy'].every(k => wb.rootHint(k).startsWith('此键字根：')) && wb.rootHint('z') === '', true);
 eq('仓颉无 rootHint（走字根名引导，非兜底形态）', cj.rootHint, undefined);
 
-// -- 课程形态边界（验收条目 11：字根总表+自由练习，无操练阶/不入七日挑战）--
+// -- 课程形态（SPEC-0004 §5.5 升级：五阶课程，#13；细目断言见文末 #13 专节）--
 const wbCourse = courseOf('wubi86');
-eq('wubi 课程形态 = 字根总表（单阶形态，不入挑战）', [wbCourse.form, wbCourse.noChallenge], ['rootTable', true]);
-eq('wubi 仅字根总表一阶（无操练/词组/易错阶）', [wbCourse.stages.map(s => s.kind), wbCourse.stages[0].name], [['rootTable'], '字根总表']);
-eq('wubi 总表阶无对应会话模式（课程不出题）', stageModes(wbCourse.stages[0]), []);
-eq('wubi 无易混对供给', wbCourse.confus, []);
-eq('wubi 不入七日挑战（谓词空态）', [wbCourse.challenge, wbCourse.challengeSub], [[], '']);
-eq('wubi 页面数据挂字根总表（渲染器读课程数据）', [wbCourse.zones === WB_ZONES, wbCourse.roots === WB_ROOTS], [true, true]);
+eq('wubi 课程升级完整五阶（降级 form 字段去除）', [wbCourse.form, wbCourse.noChallenge, wbCourse.stages.length], [undefined, undefined, 5]);
+eq('wubi 五阶形态齐（字根认知/拆字操练/单字拆打/词组/易错）', wbCourse.stages.map(s => s.kind), ['keys', 'drill', 'practice', 'practice', 'mistakes']);
+eq('wubi 认知阶无对应会话模式（视图阶不出题）', stageModes(wbCourse.stages[0]), []);
+eq('wubi 入七日挑战（谓词七条 + 副标在案）', [wbCourse.challenge.length, wbCourse.challengeSub.length > 0], [7, true]);
 eq('courseOf 五笔不回落小鹤', courseOf('wubi86').scheme, 'wubi86');
 eq('wubi 课程进度读默认空态', store.getCourse('wubi86'), { stage: 0 });
 
@@ -1014,12 +1012,11 @@ eq('速成卡互注文案（§5.1）', sui.CARD_FEATURES.quick, '速成 = 仓颉
 eq('仓颉卡回指速成（互注双向，§5.1 / P4）', sui.CARD_FEATURES.cangjie.includes('速成'), true);
 eq('五笔画卡文案 = 五键打字 · 形码第一步（#11 §3.4）', sui.CARD_FEATURES.stroke, '五键打字 · 形码第一步');
 
-// -- 状态行：课程形态标签 + 五笔灰调降级标签（条目 17 / T5-D6）--
-eq('课程形态：五阶课程（双拼/仓颉/速成/五笔画/注音/粤拼）', ['flypy', 'mspy', 'zhuyin', 'jyutping', 'stroke', 'cangjie', 'quick'].map(sui.courseFormOf),
-  ['五阶课程', '五阶课程', '五阶课程', '五阶课程', '五阶课程', '五阶课程', '五阶课程']);
+// -- 状态行：课程形态标签 + 五笔灰调标签（条目 17 / T5-D6；#13 后课程面已五阶，卡文案翻转留收尾轨）--
+eq('课程形态：五阶课程（双拼/仓颉/速成/五笔画/注音/粤拼/五笔 86）', ['flypy', 'mspy', 'zhuyin', 'jyutping', 'stroke', 'cangjie', 'quick', 'wubi86'].map(sui.courseFormOf),
+  ['五阶课程', '五阶课程', '五阶课程', '五阶课程', '五阶课程', '五阶课程', '五阶课程', '五阶课程']);
 eq('课程形态：全拼 = 提速课程', sui.courseFormOf('quanpin'), '提速课程');
-eq('课程形态：五笔 = 字根总表 + 自由练习', sui.courseFormOf('wubi86'), '字根总表 + 自由练习');
-eq('五笔灰调标签直陈（暂无五阶课程，不遮掩）', sui.cardTagOf('wubi86'), '字根总表 + 自由练习 · 暂无五阶课程');
+eq('五笔灰调标签文案翻转前保持（收尾轨去「暂无五阶课程」，#13 课程面先行）', sui.cardTagOf('wubi86'), '字根总表 + 自由练习 · 暂无五阶课程');
 eq('余方案无灰调标签', Object.keys(SCHEMES).filter(id => id !== 'wubi86').every(id => sui.cardTagOf(id) === ''), true);
 
 // -- 变化面：形码隐藏二字词/多字词/整句（条目 20 纯逻辑面，§5.4）--
@@ -1033,7 +1030,7 @@ store.addMistake('flypy', { word: '继续', py: 'ji xu', errPos: 1 });
 store.addMistake('ziranma', { word: '测试', py: 'ce shi', errPos: 1 });
 eq('小鹤摘要 = 课程第 5 阶 · 错词 2 条', sui.progressSummary('flypy'), '课程第 5 阶 · 错词 2 条');
 eq('自然码摘要 = 课程第 1 阶 · 错词 1 条', sui.progressSummary('ziranma'), '课程第 1 阶 · 错词 1 条');
-eq('五笔摘要不含课程段（降级形态无五阶）', sui.progressSummary('wubi86'), '');
+eq('五笔摘要含课程段（#13 升级五阶，默认阶 0 → 第 1 阶）', sui.progressSummary('wubi86'), '课程第 1 阶');
 
 // -- 科普 details 块按方案数据驱动（§5.1 末段 / T5-D7）--
 eq('小鹤科普：翘舌换位自方案表派生（zh→V/ch→I/sh→U）', sui.schemeHelpOf(SCHEMES.flypy).body.includes('zh 在 <b>V</b>') && sui.schemeHelpOf(SCHEMES.flypy).body.includes('按两下'), true);
@@ -1045,6 +1042,165 @@ eq('形码科普 = 字形拆解 + 仅单字取题', sui.schemeHelpOf(SCHEMES.can
 eq('五笔画科普 = 五键 + 归类规则 + 形码第一步阶梯', sui.schemeHelpOf(SCHEMES.stroke).summary === '什么是五笔画？'
   && sui.schemeHelpOf(SCHEMES.stroke).body.includes('点归捺、提归横、带转折的笔画一律归折')
   && sui.schemeHelpOf(SCHEMES.stroke).body.includes('形码的第一步'), true);
+
+// ---- v4 #13：五笔 86 全课程——引擎与课程面（SPEC-0004 §5.4–5.5，issue #13 轨道 B）----
+// 夹具包开发：真包由轨道 A 管线产出（形态 {roots, keys, kind?, id?, note?, src}），本轨以夹具注入。
+const wbFixture = JSON.parse(fs.readFileSync(new URL('fixture/wubi86-course.fixture.json', import.meta.url), 'utf8'));
+const { planOfWubi, wubiWordCode, rootNameOf, idNoteOf, fallbackPlanOf, bindWubiCourse } = wbm;
+const wbFxEntries = Object.entries(wbFixture).filter(([k]) => !k.startsWith('_'));
+const WB_FX_TABLE = Object.fromEntries(wbFxEntries);
+
+// -- 夹具形状（§5.4 schema 紧凑形）--
+eq('夹具条目皆带拆解三件（字根形序列/根键全码/人工定稿）',
+  wbFxEntries.every(([, e]) => Array.isArray(e.roots) && e.roots.length > 0 && /^[a-y]{2,4}$/.test(e.keys) && e.src === 'human'), true);
+eq('夹具特型封闭在案（键名/单笔画/成字字根，§5.3 R3）',
+  [...new Set(wbFxEntries.map(([, e]) => e.kind).filter(Boolean))].sort(), ['单笔画', '成字字根', '键名']);
+eq('夹具识别码条目自洽（键 = 末笔区 × 结构位，§5.3 R2）', (() => {
+  const ZONE = { 1: 'gfd', 2: 'hjk', 3: 'tre', 4: 'yui', 5: 'nbv' };
+  return wbFxEntries.filter(([, e]) => e.id).every(([, e]) =>
+    e.keys.endsWith(e.id.key) && e.id.key === ZONE[e.id.last][e.id.struct - 1]);
+})(), true);
+eq('夹具与码表包一致（R1：包内最短码 = 全码或其前缀；一级简码例外）',
+  wbFxEntries.every(([ch, e]) => WB_TABLE[ch] && (WB_TABLE[ch] === e.keys || e.keys.startsWith(WB_TABLE[ch]) || WB_TABLE[ch].length === 1)), true);
+eq('夹具 rootNames 皆变体形（不覆盖正形）',
+  Object.entries(wbFixture._meta.rootNames).every(([v]) => !Object.values(WB_ROOTS).some(r => r.roots.split(/\s+/).includes(v) && r.name === v)), true);
+
+// -- 纯函数：2+2 词码派生（≥12 用例，验收 24/30）--
+const WB_WORD_CASES = [
+  ['中国', 'khlg'], ['日子', 'jjbb'], ['日月', 'jjee'], ['子女', 'bbvv'], ['同学', 'mgip'],
+  ['我国', 'trlg'], ['土地', 'fffb'], ['学好', 'ipvb'], ['和好', 'tkvb'], ['十一', 'fggg'],
+  ['同一', 'mggg'], ['国土', 'lgff'], ['中日', 'khjj'], ['打字', 'rspb'], ['明月', 'jeee'], ['女王', 'vvgg'],
+];
+for (const [w, c] of WB_WORD_CASES) eq(`2+2 词码 ${w}`, wubiWordCode(w, WB_FX_TABLE), c);
+eq('2+2：字不在课程池 → null（出题过滤接缝）', wubiWordCode('中龙', WB_FX_TABLE), null);
+eq('2+2：非二字词 → null（三字及以上缓议，§1）', [wubiWordCode('王', WB_FX_TABLE), wubiWordCode('中国土', WB_FX_TABLE)], [null, null]);
+eq('2+2：无表 → null', wubiWordCode('中国', null), null);
+
+// -- 字根名映射与识别码注记料（§5.4/§5.5）--
+eq('变体形经 rootNames 映射（扌→手/氵→水/⺌→兴字头）',
+  ['扌', '氵', '⺌'].map(s => rootNameOf(s, wbFixture._meta.rootNames)), ['手', '水', '兴字头']);
+eq('正形不经映射（日/十 原样）', [rootNameOf('日', wbFixture._meta.rootNames), rootNameOf('十', wbFixture._meta.rootNames)], ['日', '十']);
+eq('识别码注记 = 末笔 · 结构（§5.5 例：末笔横 · 左右）',
+  [idNoteOf({ last: 1, struct: 1 }), idNoteOf({ last: 2, struct: 2 }), idNoteOf({ last: 4, struct: 3 }), idNoteOf({ last: 5, struct: 1 })],
+  ['末笔横 · 左右', '末笔竖 · 上下', '末笔捺 · 杂合', '末笔折 · 左右']);
+
+// -- planOf 双形态：未注入保持 §4.2 兜底 --
+eq('未注入：五笔 plan 保持 §4.2 兜底（role=码键、label=大写字母）',
+  wb.planOf('khk', { word: '中' }), fallbackPlanOf('khk'));
+
+// -- 注入口：夹具注入（收尾轨接真包）--
+const wbBaseFns = { codeOf: wb.codeOf, planOf: wb.planOf };
+bindWubiCourse(wb, wbFixture);
+eq('注入口挂课程表与变体名表', [Object.keys(wb.courseTable).length, wb.rootNames['扌']], [wbFxEntries.length, '手']);
+
+// -- 课程字全码档：逐步引导（① 日 J ② 月 E ③ 识别码 G，§5.5）--
+eq('planOfWubi 直调：明全码 = 日 J / 月 E / 识别码 G',
+  planOfWubi('jeg', { word: '明' }, WB_FX_TABLE, wbFixture._meta.rootNames).keys.map(k => `${k.label} ${k.key.toUpperCase()}`),
+  ['日 J', '月 E', '识别码 G G']);
+eq('识别码步注记（末笔横 · 左右）与字根步注记（键位话术料）', (() => {
+  const ks = wb.planOf('jeg', { word: '明' }).keys;
+  return [ks[2].note, ks[0].note, ks.map(k => k.role)];
+})(), ['末笔横 · 左右', '键 J', ['root', 'root', 'root']]);
+eq('变体形根经映射出字根名（打：扌→手，识别码 H 末笔竖 · 左右）',
+  wb.planOf('rsh', { word: '打' }).keys.map(k => k.label), ['手', '丁', '识别码 H']);
+eq('planOfWubi 直调：我全码四根（变体形 扌→手）',
+  planOfWubi('trnt', { word: '我' }, WB_FX_TABLE, wbFixture._meta.rootNames).keys.map(k => k.label), ['丿', '手', '乙', '丿']);
+eq('键名全码逐步（日 = 键名 · 同键连按四下）', (() => {
+  const p = wb.planOf('jjjj', { word: '日' });
+  return [p.keys.map(k => k.label), p.keys[0].note, p.keys[1].note];
+})(), [['日', '日', '日', '日'], '键名 · 同键连按 4 下', '键 J']);
+eq('成字字根逐步（十：键 + 首笔横 + 末笔竖）',
+  wb.planOf('fgh', { word: '十' }).keys.map(k => k.label), ['十', '首笔横', '末笔竖']);
+eq('单笔画全码（一：键键 + 笔画代码 ll）',
+  wb.planOf('ggll', { word: '一' }).keys.map(k => k.label), ['一', '一', '笔画代码', '笔画代码']);
+
+// -- 简码档：简码级与全码附注（我：一级简码 Q，全码 TRNT，§5.5）--
+eq('简码附注：一级简码不合首根键（我=q 而全码 trnt）', (() => {
+  const p = wb.planOf('q', { word: '我' });
+  return [p.keys.map(k => k.label), p.keys[0].note];
+})(), [['一级简码 Q'], '全码 TRNT']);
+eq('简码附注：合首根前缀（和=t：字根步 + 一级简码，全码 TKG）',
+  wb.planOf('t', { word: '和' }).keys[0], { key: 't', label: '禾', note: '键 T · 一级简码，全码 TKG', role: 'root' });
+eq('简码附注：二级前缀（明=je：末步带全码注）',
+  wb.planOf('je', { word: '明' }).keys[1].note, '键 E · 二级简码，全码 JEG');
+eq('简码附注：键名简码（王=ggg → 全码 GGGG）',
+  wb.planOf('ggg', { word: '王' }).keys[2].note, '全码 GGGG');
+eq('简码档经包码真值（包内最短码直入）', [wb.codeOf({ word: '这' }), wb.planOf('p', { word: '这' }).keys[0].label], ['p', '一级简码 P']);
+
+// -- 非课程字保持 §4.2 兜底（双形态分流）--
+eq('注入后非课程字仍 §4.2 兜底（键：role=码键）', wb.planOf('qvfp', { word: '键' }), fallbackPlanOf('qvfp'));
+eq('注入后导入单字兜底不变', wb.planOf('abc', { word: '龘' }), fallbackPlanOf('abc'));
+
+// -- codeOf 放宽：课程池二字词可出题（§3.4 对 wubi86 的放宽）--
+eq('注入后二字词取题 = 2+2 词码', wb.codeOf({ word: '中国', py: 'zhong guo' }), 'khlg');
+eq('注入后单字取题不变（码权威仍在码表包）', [wb.codeOf({ word: '明' }), wb.codeOf({ word: '我' })], ['je', 'q']);
+eq('词中任一字不在课程池 → 不可出题', wb.codeOf({ word: '中龙' }), null);
+eq('三字及以上维持仅单字纪律', [wb.codeOf({ word: '王彬宇' }), wb.codeOf({ word: '中华人民共和国' })], [null, null]);
+eq('词 plan 键序 = 2+2 词码', wb.planOf('khlg', { word: '中国' }).keys.map(k => k.key), ['k', 'h', 'l', 'g']);
+eq('词 plan 步骤 = 各字前两拆解（role=root）', wb.planOf('khlg', { word: '中国' }).keys.map(k => k.label), ['口', '丨', '囗', '王']);
+eq('词 plan groups 标字界', wb.planOf('khlg', { word: '中国' }).groups,
+  [{ word: '中', start: 0, len: 2 }, { word: '国', start: 2, len: 2 }]);
+eq('内置词池经放宽后可出题者皆双字在课程池', (() => {
+  const got = POOL.words2.filter(({ w }) => wb.codeOf({ word: w }));
+  return got.length > 0 && got.every(({ w }) => [...w].every(ch => !!wb.courseTable[ch]));
+})(), true);
+
+// -- 课程五阶结构（§5.5 数据面）--
+eq('wubi 阶 0 = 字根认知（roots 视图 + 五区叙事）',
+  [wbCourse.stages[0].kind, wbCourse.stages[0].view, wbCourse.stages[0].body.includes('五区')], ['keys', 'roots', true]);
+eq('wubi 阶 0 分组 = 五区 × 五键（区位号只进组文案助记）',
+  [wbCourse.stages[0].groups.map(g => g.keys.length), wbCourse.stages[0].groups.map(g => g.label)],
+  [[5, 5, 5, 5, 5], ['横区 · 区位 11–15', '竖区 · 区位 21–25', '撇区 · 区位 31–35', '捺区 · 区位 41–45', '折区 · 区位 51–55']]);
+eq('wubi 阶 0 letters = WB_ROOTS 映射（25 键、Z 不入）',
+  Object.keys(wbCourse.stages[0].letters).sort().join(''), 'abcdefghijklmnopqrstuvwxy');
+eq('wubi 阶 0 letters 与总表同源（键名/字根形清单/例字）',
+  Object.entries(WB_ROOTS).every(([k, r]) => {
+    const L = wbCourse.stages[0].letters[k];
+    return L.name === r.name && L.forms === r.roots && L.ex === r.ex && L.note.includes(`${r.zone}区${r.pos}位`);
+  }), true);
+const wbDrill = wbCourse.stages[1];
+eq('wubi 阶 1 = 拆字操练（wbkey 单元，Z 不入）', [wbDrill.kind, wbDrill.unit], ['drill', 'wbkey']);
+eq('wubi 阶 1 SRS 单元 = 25 码键',
+  wbDrill.groups.flatMap(g => g.keys).sort().join(''), 'abcdefghijklmnopqrstuvwxy');
+eq('wubi 阶 1 供键名根（「字根形在哪键」反表）', [wbDrill.roots.g, wbDrill.roots.j, wbDrill.roots.n], ['王', '日', '已']);
+eq('wubi 阶 2 = 单字拆打（chars@len，先简字后满码）',
+  [stageModes(wbCourse.stages[2]), wbCourse.stages[2].body.includes('末笔 · 结构')], [['chars@len'], true]);
+eq('wubi 阶 3 = 词组真词出题（words2 池 + 2+2 口径文案）',
+  [stageModes(wbCourse.stages[3]), wbCourse.stages[3].body.includes('前两键连打') && wbCourse.stages[3].body.includes('KHLG')],
+  [['words2'], true]);
+eq('wubi 阶 3 与阶 2 模式名可区分', stageModes(wbCourse.stages[2]).concat(stageModes(wbCourse.stages[3])), ['chars@len', 'words2']);
+eq('wubi 阶 4 = 错词本', wbCourse.stages[4].kind, 'mistakes');
+
+// -- confus 形近字根对：供给形状 + 两侧课程字可取题（夹具注入态）--
+eq('wubi 易混对皆形近字根对（role 直给 + 辨形注记）',
+  wbCourse.confus.every(p => p.role === 'root' && p.keys.length === 2 && p.note), true);
+eq('wubi 易混对键皆在 25 码键域且跨键',
+  wbCourse.confus.every(p => p.keys[0] !== p.keys[1] && p.keys.every(k => 'abcdefghijklmnopqrstuvwxy'.includes(k))), true);
+eq('wubi 易混对四对（日/目、禾/木、刀/力、儿/几）',
+  wbCourse.confus.map(p => p.label), ['日/目 · 形近字根', '禾/木 · 形近字根', '刀/力 · 形近字根', '儿/几 · 形近字根']);
+for (const pair of wbCourse.confus) {
+  const touch = (k) => wbFxEntries.filter(([ch]) => {
+    const c = WB_TABLE[ch];
+    return c && wb.planOf(c, { word: ch }).keys.some(u => u.key === k && u.role === 'root');
+  }).length;
+  eq(`wubi 易混对 ${pair.label} 两侧课程字可取题`, pair.keys.every(k => touch(k) > 0), true);
+}
+
+// -- 七日挑战谓词可判定 --
+eq('wubi 挑战七条齐且标签可判', [wbCourse.challenge.length, wbCourse.challenge.every(i => i.tag && i.label)], [7, true]);
+eq('wubi 挑战 D1 any 谓词', challengeMatch(wbCourse.challenge[0].match, 'chars', wbCourse), true);
+eq('wubi 挑战 D2 = 拆字操练', challengeMatch(wbCourse.challenge[1].match, 'finaldrill', wbCourse), true);
+eq('wubi 挑战 D3 = 单字拆打（@len 可区分）',
+  challengeMatch(wbCourse.challenge[2].match, 'chars@len', wbCourse) && !challengeMatch(wbCourse.challenge[2].match, 'chars', wbCourse), true);
+eq('wubi 挑战 D4 = 词组 words2', challengeMatch(wbCourse.challenge[3].match, 'words2', wbCourse) && !challengeMatch(wbCourse.challenge[3].match, 'chars', wbCourse), true);
+eq('wubi 挑战 D5 = confus 前缀', challengeMatch(wbCourse.challenge[4].match, 'confus:1', wbCourse), true);
+eq('wubi 挑战 D6/D7 = sprint/mixed',
+  challengeMatch(wbCourse.challenge[5].match, 'sprint', wbCourse) && challengeMatch(wbCourse.challenge[6].match, 'mixed', wbCourse), true);
+
+// -- 撤注入：回落降级形态语义（不污染后续断言）--
+wb.codeOf = wbBaseFns.codeOf; wb.planOf = wbBaseFns.planOf; delete wb.courseTable; delete wb.rootNames;
+eq('撤注入后回落 §4.2 兜底与仅单字纪律',
+  [wb.planOf('khk', { word: '中' }).keys[0].role, wb.codeOf({ word: '中国' })], ['码键', null]);
 
 // -- sw.js 单测（桩环境：classic worker 脚本按模块导入，globals 先就位）--
 const swHandlers = {};
