@@ -358,6 +358,47 @@ function makeWubi86() {
   return bindPack(scheme, 'wubi86');
 }
 
+// ---- 五笔画（笔画输入）：标准 shape 单字查表（SPEC-0004 §3.2，issue #11）----
+// 五键 = 横竖撇捺折（官方 xlit/hspnz/⼀⼁⼃⼂⼄ 先例）；归类：点归捺、提归横、带转折归折。
+// 无音节、无词码、逐笔输入（官方码表 max_phrase_length:1）——多字词 codeOf=null 天然过滤（§3.4）。
+// 模板参照 makeWubi86（约 40 行）：仅用既有 codeOf/planOf/layout/bindPack 接口，引擎零改动。
+export const SK_KEYS = ['h', 's', 'p', 'n', 'z'];
+const SK_STROKE = { h: '横', s: '竖', p: '撇', n: '捺', z: '折' };
+const SK_FORM = { h: '⼀', s: '⼁', p: '⼃', n: '⼂', z: '⼄' }; // 康熙笔画字形角标
+const SK_TITLE = {
+  h: '横 · 提归横（提笔在此键）',
+  s: '竖 · 竖笔在此键',
+  p: '撇 · 撇笔在此键',
+  n: '捺 · 点归捺（点笔在此键）',
+  z: '折 · 带转折的笔画皆归此键（竖钩/横折钩/斜钩/卧钩一类）',
+};
+function makeStroke() {
+  const scheme = { id: 'stroke', name: '五笔画', paradigm: 'shape' };
+  const codeOf = (entry) => {
+    const word = entry && entry.word;
+    if (!word || [...word].length !== 1) return null; // 取题仅单字（§3.4；官方码表无词码）
+    return (scheme.table && scheme.table[word]) || null; // 表未就绪/缺字 → 不可出题
+  };
+  // plan 逐笔展开，label = 笔画名——「全提示」档即笔顺教学本身（§3.3）
+  const planOf = (code) => ({
+    keys: [...String(code || '')].map((ch) => ({ key: ch, label: SK_STROKE[ch] || ch.toUpperCase(), note: '', role: 'root' })),
+    groups: [],
+  });
+  // 布局复用 ROWS3：仅 h/s/p/n/z 五键点亮（角标康熙笔画字形），余键暗面
+  const keyLabel = (ch) => SK_STROKE[ch]
+    ? { main: ch.toUpperCase(), sub: SK_FORM[ch], title: `五笔画 · ${SK_TITLE[ch]} · 键 ${ch.toUpperCase()}` }
+    : { main: ch.toUpperCase(), sub: '', title: `键 ${ch.toUpperCase()} · 五笔画不使用` };
+  scheme.codeOf = codeOf;
+  scheme.planOf = planOf;
+  scheme.layout = {
+    ROWS: ROWS3, extraKeys: [], keyLabel,
+    specialOf: () => '', // 五键皆取码，无描边单列键
+  };
+  scheme.activate = () => Promise.resolve(); // bindPack 覆写为 pack 装载
+  scheme.YM = {}; scheme.SM_KEYS = {}; scheme.SM_NAME = {};
+  return bindPack(scheme, 'stroke');
+}
+
 export const SCHEMES = {
   flypy: makeScheme({
     id: 'flypy', name: '小鹤双拼', zero: 'first', zeroDouble: true, jqxyV: true,
@@ -405,6 +446,7 @@ export const SCHEMES = {
   cangjie: makeShapeScheme({ id: 'cangjie', name: '仓颉', derive: (full) => full }), // 深教样板（T3-D1/D2）
   quick: makeShapeScheme({ id: 'quick', name: '速成', derive: quickOf }), // 官方变体：首尾二码，复用全五阶（T3-D4）
   wubi86: makeWubi86(), // 降级形态：字根总表 + 自由练习（T3-D4，issue #6）
+  stroke: makeStroke(), // 五笔画（笔画输入）：形码入门，标准 shape 单字查表（SPEC-0004 §3，issue #11）
 };
 
 export const DEFAULT_SCHEME = 'flypy'; // 小鹤仍是旗舰与默认（map-Q3a）
