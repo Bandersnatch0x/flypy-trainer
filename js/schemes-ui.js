@@ -32,7 +32,7 @@ export const CARD_FEATURES = {
   cangjie: '字形拆成字母序列，熟字根即识码；速成取其首尾二码',
   quick: '速成 = 仓颉首尾二码，节奏更快',
   stroke: '五键打字 · 形码第一步',
-  wubi86: '字根查表出码，先认字根再自由练习',
+  wubi86: '五区字根 · 拆字逐步引导 · 词组 2+2',
 };
 
 // 卡片五层信息之④：课程形态标签（§5.1 状态行）
@@ -43,14 +43,16 @@ export function courseFormOf(id) {
   return '五阶课程';
 }
 
-// 五笔 86 降级形态灰调标签全句（§5.1 / T5-D6）：标签直陈、不遮掩不劝退
+// 五笔 86 灰调标签：M3 翻转后清空（去「暂无五阶课程」，SPEC-0004 §6-25）
 export function cardTagOf(id) {
-  return id === 'wubi86' ? '字根总表 + 自由练习 · 暂无五阶课程' : '';
+  return '';
 }
 
-// 变化面裁定（§5.4）：形码隐藏二字词/多字词/整句（v3 形码只取单字，T2-D5）
+// 变化面裁定（§5.4）：形码隐藏多字词/整句；五笔 86 放宽课程池二字词（§5.5）
 export function hiddenModesFor(scheme) {
-  return scheme && scheme.paradigm === 'shape' ? ['words2', 'words34', 'sentences'] : [];
+  if (!scheme || scheme.paradigm !== 'shape') return [];
+  if (scheme.id === 'wubi86') return ['words34', 'sentences'];
+  return ['words2', 'words34', 'sentences'];
 }
 
 // 切回态卡片摘要（§5.5 三态 1）：课程第 N 阶 · 错词 X 条；皆无则不显
@@ -72,6 +74,14 @@ export function schemeHelpOf(scheme) {
       body: `<p>五笔画（笔画输入）只用五个键：<b>横 H、竖 S、撇 P、捺 N、折 Z</b>。每个字的码 = 按书写笔顺逐笔按键，会写字就会打。</p>
         <p>三条归类规则：<b>点归捺、提归横、带转折的笔画一律归折</b>。没有音节、没有词码——打词就是逐字连打。</p>
         <p>零记忆、零门槛，是形码的第一步：先建立笔顺感与键位感，再进阶仓颉或五笔 86。</p>`,
+    };
+  }
+  if (scheme.id === 'wubi86') {
+    return {
+      summary: `什么是${scheme.name}？什么是形码？`,
+      body: `<p>形码的码来自字形：把汉字按规则拆成字根（部件），字根落在键上，码就是拆出的键序。「拼」字怎么写，码就怎么打，与读音无关。</p>
+        <p><b>五笔 86</b>按五区 25 键认字根，课程字逐步引导拆解；词组取课程池二字词，各字全码前两键连打（2+2）。三字及以上与整句仍不取题。</p>
+        <p>建议先从课程页的字根认知开始，认熟字根再上练习页。</p>`,
     };
   }
   if (scheme.paradigm === 'shape') {
@@ -152,7 +162,7 @@ export async function renderSchemeLibrary(box, env) {
 
 async function buildCard(cur, env, s, flagship) {
   const card = document.createElement('article');
-  card.className = 'scard' + (flagship ? ' flagship' : '') + (s.id === 'wubi86' ? ' degraded' : '');
+  card.className = 'scard' + (flagship ? ' flagship' : '');
   card.dataset.scheme = s.id;
   const isCur = s.id === cur.id;
   const pack = s.packId ? PACKS[s.packId] : null;
@@ -162,7 +172,8 @@ async function buildCard(cur, env, s, flagship) {
   const tags = [s.paradigm === 'shape' ? '形码' : '音码'];
   if (s.id !== 'quanpin' && s.id !== 'zhuyin' && s.id !== 'jyutping' && s.paradigm === 'phonetic') tags.push('双拼');
   const badge = flagship ? '<b class="flagbadge">旗舰 · 默认</b>' : '';
-  const grayTag = s.id === 'wubi86' ? `<span class="formtag gray">${cardTagOf(s.id)}</span>` : '';
+  const tag = cardTagOf(s.id);
+  const grayTag = tag ? `<span class="formtag gray">${tag}</span>` : '';
 
   // ④ 状态行 = 课程形态 + 数据状态
   const dataState = !pack ? '无需下载' : cached ? '已缓存 ✓' : `未下载 ~${pack.kb}KB`;
@@ -200,7 +211,7 @@ async function buildCard(cur, env, s, flagship) {
     dl.textContent = `预下载 ~${pack.kb}KB`;
     dl.onclick = async () => {
       dl.disabled = true; dl.textContent = `正在下载 ~${pack.kb}KB…`;
-      const r = await prefetchPacks([s.packId]);
+      const r = await prefetchPacks([s.packId, s.coursePackId].filter(Boolean));
       if (r.ok) {
         dl.textContent = '已缓存 ✓';
         const st = card.querySelector('.datastate');

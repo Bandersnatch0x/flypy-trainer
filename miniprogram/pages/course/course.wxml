@@ -5,7 +5,7 @@
   </view>
 
   <block wx:else>
-    <!-- 五阶进度（降级形态仅字根总表一阶） -->
+    <!-- 五阶进度 -->
     <view class="stages">
       <view wx:for="{{stages}}" wx:key="index"
         class="stage {{index === stageIdx ? 'on' : ''}} {{index < stageIdx ? 'done' : ''}}"
@@ -82,6 +82,6 @@
         <view wx:if="{{vm.note}}" class="formnote">{{vm.note}}</view>
         <button wx:if="{{vm.note}}" class="btn primary" bindtap="goFree">自由练习 · 仅单字出题</button>
       </block>
-    </view>
+    <view wx:if="{{schemeId === 'wubi86'}}" class="formnote">拆解为本站教学口径。</view>
   </block>
 </view>

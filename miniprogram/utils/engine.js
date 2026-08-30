@@ -4,6 +4,7 @@
 // finaldrill SRS 记账 / sprint 连击 / 错词本 {word,py,errPos} / adapt 升降档（ADR-0006）。
 const { BUILTIN } = require('./data.js');
 const { courseOf, confusKeys, confusEndsMatch, syllablesOf } = require('./courses.js');
+const { firstKeyOfWubi } = require('./wubi.js');
 const { mergeEntries, weightedSample } = require('./parsers.js');
 const { store } = require('./store.js');
 const { sound } = require('./sound.js');
@@ -124,14 +125,16 @@ function startDrill(st, first, seq) {
   let hit;
   if (drillUnit === 'syllable') {
     hit = chars.filter(e => syllablesOf(e.py).some(s => drillSeq.includes(s)));
-  } else if (drillUnit === 'letter') {
-    // 形码拆字操练（#5）：字根本字 = 一键题；首码命中字 = 出字问首码
-    const rootWords = new Set(drillSeq.map(k => st.roots && st.roots[k]).filter(Boolean));
+  } else if (drillUnit === 'letter' || drillUnit === 'wbkey') {
+    // 形码拆字操练：字根形反查题 + 课程字首码题
+    const rootWords = new Set(drillSeq.map(k => st.roots && Object.entries(st.roots).find(([, key]) => key === k)?.[0]).filter(Boolean));
     const roots = [...rootWords].map(w => ({ word: w, py: '', weight: 3 }));
     hit = [...roots, ...chars.filter(e => {
       if (rootWords.has(e.word)) return false;
       const c = scheme.codeOf(e);
-      return c && drillSeq.includes(c[0]);
+      const first = scheme.courseTable && scheme.courseTable[e.word]
+        ? firstKeyOfWubi(e, scheme.courseTable, c) : c && c[0];
+      return first && drillSeq.includes(first);
     })];
   } else {
     hit = chars.filter(e => entryTouchesKey(e, drillSeq, drillUnit === 'ymKey' ? 'ym' : undefined));

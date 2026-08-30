@@ -1,6 +1,7 @@
 import { BUILTIN } from './data.js';
 import { getScheme, SCHEMES } from './schemes.js';
 import { courseOf, confusKeys, confusEndsMatch, syllablesOf, challengeMatch } from './courses.js';
+import { firstKeyOfWubi } from './wubi.js';
 import { sniffAndParse, mergeEntries, weightedSample, parsePlain } from './parsers.js';
 import { store, migrate } from './store.js';
 import { PACKS as DATA_PACKS, packState } from './packs.js';
@@ -72,7 +73,11 @@ function buildKeyboard(container, { heat = false, map = false, onKey = null, pre
       d.className = 'key' + (spec ? ' special' : '');
       d.dataset.key = ch;
       d.innerHTML = `<span class="sm">${esc(lab.main)}</span><span class="ym">${esc(lab.sub)}</span>`;
-      if (map) d.title = lab.title || [spec ? `声母 ${spec}` : '', lab.sub ? `韵母 ${lab.sub}` : ''].filter(Boolean).join('｜') || `键 ${lab.main}`;
+      // 练习/预览/认知图同源：有 keyLabel.title 即挂（五笔字根全列截断后 title 保全量）；
+      // 音码无 title 时仅认知图走原声韵兜底，练习键盘不加空 title。
+      d.title = lab.title || (map
+        ? [spec ? `声母 ${spec}` : '', lab.sub ? `韵母 ${lab.sub}` : ''].filter(Boolean).join('｜') || `键 ${lab.main}`
+        : '');
       els[ch] = d;
       r.appendChild(d);
     }
@@ -100,9 +105,12 @@ keyEls = buildKeyboard($('kb'));
 // 数据包激活状态流（§5.5 三态 2）：正在准备资料包 → 就绪「开练」/ 失败「点按重试」
 // 就绪判定按「本方案表已挂载」：速成与仓颉共用 cangjie5 包，pack 就绪不等于每个方案都已接载
 async function ensurePack(s) {
-  if (!s.packId || s.table) return true;
-  const p = DATA_PACKS[s.packId];
-  if (packState(s.packId) !== 'ready') toast(`正在准备${p.name}（~${p.kb}KB）…`);
+  const needsCode = s.packId && !s.table;
+  const needsCourse = s.coursePackId && !s.courseReady;
+  if (!needsCode && !needsCourse) return true;
+  const packId = needsCourse ? s.coursePackId : s.packId;
+  const p = DATA_PACKS[packId];
+  if (packState(packId) !== 'ready') toast(`正在准备${p.name}（~${p.kb}KB）…`);
   try {
     await s.activate(); // pack 已在内存时即时返回（内存缓存命中，零下载）
     toast(`${s.name}就绪，开练`);
@@ -116,7 +124,8 @@ async function ensurePack(s) {
 async function applyScheme(id) {
   const next = getScheme(id);
   const same = next.id === scheme.id;
-  if (same && !(next.packId && packState(next.packId) !== 'ready')) { updateChip(); return true; } // 同方案且无需补载
+  if (same && !(next.packId && packState(next.packId) !== 'ready')
+    && !(next.coursePackId && !next.courseReady)) { updateChip(); return true; } // 同方案且所有数据已接载
   scheme = next;
   rebuildKb();
   const s = store.getSettings();
@@ -134,6 +143,7 @@ async function applyScheme(id) {
   if (!same) toast(queue.length && idx < queue.length ? `已切换：${scheme.name} · 本轮重新出题` : `已切换：${scheme.name}`);
   const ok = await ensurePack(scheme);
   if (!ok) return false;
+  if (!$('view-course').classList.contains('hidden')) renderCourse();
   // 变化面：形码下被隐藏的模式回落单字（§5.4）
   if (!same && hiddenModesFor(scheme).includes(mode)) { mode = 'chars'; setModeButton(mode); }
   startSession(mode === 'finaldrill' ? 'chars' : mode); // 一律按新方案重新出题/刷新空态
@@ -262,6 +272,7 @@ function showEmptyBoard(filteredOut) {
     : mode === 'personal' ? '还没有导入词库 —— 去「导入」页添加你的词库，或换别的模式'
     : mode.startsWith('weak:') ? '该键还没有练习数据 —— 先练几轮'
     : mode === 'mistakes' ? '错词本是空的 —— 先去练一轮'
+    : filteredOut && scheme.id === 'wubi86' && String(mode).includes('words2') ? `${scheme.name}词组只出课程池二字词 —— 换单字或再练几轮拆字`
     : filteredOut && scheme.paradigm === 'shape' ? `${scheme.name}仅取单字出题 —— 多字词与整句不取题，换个模式试试`
     : '这个模式在当前方案下暂无可练内容 —— 换别的模式试试';
   if (packMissing) {
@@ -317,7 +328,7 @@ function updateHighlight(p) {
   if (hintLevel === 'full') {
     let html = guideText();
     // 五笔 86 兜底形态（§4.2）：展开当前键的字根候选表（与字根总表页同源取数）
-    const curRoots = scheme.rootHint && cur ? scheme.rootHint(cur.key) : '';
+    const curRoots = scheme.rootHint && cur && cur.role !== 'root' ? scheme.rootHint(cur.key) : '';
     if (curRoots) html += `<div class="roothint">${esc(curRoots)}</div>`;
     $('guide').innerHTML = html;
   }
@@ -632,6 +643,13 @@ function challengeState() {
 
 function renderCourse() {
   const course = courseOf(scheme.id);
+  const body = $('stageBody');
+  if (scheme.coursePackId && !scheme.courseReady) {
+    $('stages').innerHTML = '';
+    body.innerHTML = `<p class="formnote">${esc(DATA_PACKS[scheme.coursePackId].name)}未就绪。</p><button class="btn primary" id="courseRetry">重试加载资料包</button>`;
+    $('courseRetry').onclick = async () => { if (await ensurePack(scheme)) renderCourse(); };
+    return;
+  }
   const ol = $('stages');
   ol.innerHTML = '';
   course.stages.forEach((st, i) => {
@@ -641,8 +659,7 @@ function renderCourse() {
     li.onclick = () => { stageIdx = i; store.setCourse(scheme.id, { stage: i }); renderCourse(); };
     ol.appendChild(li);
   });
-  // 七日挑战卡（谓词读范式课程数据，〔规格推断〕6）；降级形态（五笔 86）不入挑战——
-  // 不渲染挑战卡，形态边界由字根总表页内空态文案直陈（issue #6）
+  // 七日挑战卡（谓词读范式课程数据）；课程包失败时由上方重试态接管
   if (!course.noChallenge) {
     const card = document.createElement('li');
     card.className = 'challenge';
@@ -657,12 +674,12 @@ function renderCourse() {
     ol.appendChild(card);
   }
 
-  const body = $('stageBody');
   body.innerHTML = '';
   renderStage(body, course.stages[stageIdx]);
+  if (scheme.id === 'wubi86') body.insertAdjacentHTML('beforeend', '<p class="formnote">拆解为本站教学口径。</p>');
 }
 
-// 字根分区芯片组（字根总表页与形码字根认知视图共用，#9 收口）：
+// 课程页正文统一追加拆解口径说明，避免把自写教学拆解误作唯一标准。
 // groups=[{label, desc?, keys}]，芯片标签随当前方案键帽派生，点击回调 pick
 function renderRootChips(cats, groups, pick) {
   for (const g of groups || []) {
@@ -684,8 +701,7 @@ function renderRootChips(cats, groups, pick) {
   }
 }
 
-// 降级形态课程视图：字根总表页（五笔 86，issue #6）——无 SRS 操练、不入七日挑战，
-// 页面自带形态边界空态；自由练习从本页直达单字取题（§2/§4.1 五笔列、§5.1）
+// 兼容兜底课程视图：字根总表页；课程包失败时由 renderCourse 显示可重试状态。
 function renderRootsPage(body, st) {
   const course = courseOf(scheme.id);
   body.innerHTML = `<h3>${esc(st.name)}</h3><p class="sub">${esc(st.sub)}</p>
@@ -693,7 +709,7 @@ function renderRootsPage(body, st) {
     <div class="kbmap" id="kbmap"></div>
     <div class="rootdetail" id="rootdetail"><p class="sub">点击任意键或下方键位，查看键上字根与例字。</p></div>
     <div class="rootcats" id="rootcats"></div>
-    <p class="formnote">本方案无五阶课程、无间隔重复操练，也不入七日挑战——先认字根，再自由练习。</p>
+    <p class="formnote">拆解为本站教学口径。</p>
     <button class="btn primary" id="goFree">自由练习 · 仅单字出题</button>`;
   const pick = (ch) => {
     const info = (course.roots || {})[ch];
@@ -716,7 +732,7 @@ function renderRootsPage(body, st) {
 }
 
 function renderStage(body, st) {
-  if (st.kind === 'rootTable') renderRootsPage(body, st); // 五笔 86 降级形态：字根总表页（issue #6）
+  if (st.kind === 'rootTable') renderRootsPage(body, st); // 兼容视图：课程包未接载时使用
   else if (st.kind === 'keys') renderStageKeys(body, st);
   else if (st.kind === 'drill') renderStageDrill(body, st);
   else if (st.kind === 'mistakes') renderStageMistakes(body, st);
@@ -779,7 +795,7 @@ function renderStageKeys(body, st) {
   buildKeyboard($('kbmap'), { map: true });
 }
 
-// kind='drill'：间隔重复操练。双拼单元=韵母键（按钮自布局派生）；全拼单元=音节（课程数据清单）
+// kind='drill'：间隔重复操练。双拼单元=韵母键；全拼单元=音节；五笔单元=码键
 function renderStageDrill(body, st) {
   const due = store.srsDueKeys(scheme.id);
   const unitName = st.unit === 'syllable' ? '音节' : st.unit === 'letter' ? '字母' : '键';
@@ -803,7 +819,7 @@ function renderStageDrill(body, st) {
     for (const syl of st.items || []) {
       mkBtn(`${syl.toUpperCase()}${due.includes(syl) ? '<b class="due-dot">●</b>' : ''}`, syl);
     }
-  } else if (st.unit === 'symbol' || st.unit === 'letter') {
+  } else if (st.unit === 'symbol' || st.unit === 'letter' || st.unit === 'wbkey') {
     // 注音符号键分组（声符→介符→韵符→声调键收尾，§4.1）/ 仓颉字母四类分组（#5）；
     // 按钮标签随布局键帽派生
     for (const g of st.groups || []) {
@@ -841,14 +857,16 @@ function startDrill(st, first, seq) {
   let hit;
   if (drillUnit === 'syllable') {
     hit = chars.filter(e => syllablesOf(e.py).some(s => drillSeq.includes(s)));
-  } else if (drillUnit === 'letter') {
-    // 形码拆字操练（#5）：字根本字 = 一键题「字根 X 在哪键」；首码命中字 = 出字问首码，顺手打全拆解
-    const rootWords = new Set(drillSeq.map(k => st.roots && st.roots[k]).filter(Boolean));
+  } else if (drillUnit === 'letter' || drillUnit === 'wbkey') {
+    // 形码拆字操练：字根形反查题 + 课程字首码题
+    const rootWords = new Set(drillSeq.map(k => st.roots && Object.entries(st.roots).find(([, key]) => key === k)?.[0]).filter(Boolean));
     const roots = [...rootWords].map(w => ({ word: w, py: '', weight: 3 }));
     hit = [...roots, ...chars.filter(e => {
       if (rootWords.has(e.word)) return false;
       const c = scheme.codeOf(e);
-      return c && drillSeq.includes(c[0]);
+      const first = scheme.courseTable && scheme.courseTable[e.word]
+        ? firstKeyOfWubi(e, scheme.courseTable, c) : c && c[0];
+      return first && drillSeq.includes(first);
     })];
   } else {
     hit = chars.filter(e => entryTouchesKey(e, drillSeq, drillUnit === 'ymKey' ? 'ym' : undefined));
@@ -1219,6 +1237,7 @@ updateChip();
 renderStreak();
 route();
 (async () => {
-  await ensurePack(scheme); // 带包方案（注音）：先走激活状态流再出题
+  const ok = await ensurePack(scheme); // 带包方案先走激活状态流再出题
+  if (ok && location.hash === '#/course') renderCourse();
   startSession('chars');
 })();

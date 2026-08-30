@@ -1,15 +1,11 @@
 // 课程数据（v3 课程数据化，SPEC-0003 §4.1 / §8 缺口 1，issue #3）。
 //
-// ===== 课程数据 schema v1（后续各范式课程照此格式产出）=====
+// 课程数据 schema v1（后续各范式课程照此格式产出）=====
 // 每方案一份课程数据；每阶 = 课程数据 + 通用渲染器（渲染在 js/app.js，不含范式分支）。
 // {
 //   scheme: string,            // 方案 id
-//   form?: 'rootTable',        // 降级形态：单阶课程 = 字根总表页（〔规格推断〕8）——
-//                              //   stages 恰一阶 kind:'rootTable'（渲染器 js/app.js renderRootsPage，
-//                              //   zones/roots 挂字根总表数据）；无 SRS 操练、不入七日挑战
-//                              //   （noChallenge → 挑战卡不渲染，形态边界由页内空态直陈）、无易混对供给。
-//                              //   五笔 86 曾在该形态（#6），SPEC-0004 §5.5 已升级为完整五阶（#13），
-//                              //   此形状留作后续方案的降级底本
+//   form?: 'rootTable',        // 兼容视图：课程包未接载时可显示字根总表
+//                              //   五笔课程包正常接载时使用完整五阶 stages
 //   challengeSub: string,      // 七日挑战卡副标文案
 //   stages: [                  // 恰 5 阶，形状固定；公共字段 name（阶名）/ sub（副标题）/ body（正文，'{n}'=错词数占位）
 //     // kind='keys'     键位图认知/诊断：{view:'map'} 键位说明图 | {view:'heat'} 弱键热力图（点键即弱键特训）
@@ -23,13 +19,13 @@
 //     //                 粤拼：声母→韵母→六调键收尾，SRS 单元=字母键+调键 v/x/q，SPEC-0004 §7 推断 3；
 //     //                 五笔画：五笔画键一组，题型「笔画（或例字首笔）→ 在哪键」，全站最轻操练，SPEC-0004 §3.3）；
 //     //                 letter=仓颉字母键（形码 #5：groups=四类分组；SRS 单元=24 字母，X 不教 Z 非取码；
-//     //                 roots 供「字根 X 在哪键」一键题=字根本字；出字题打首码起的全码）；
+//     //                 roots 供「字根 X 在哪键」一键题；出字题打首码起的全码）；
 //     //                 wbkey=五笔 86 码键（#13：groups=五区分组；SRS 单元=25 码键，Z 学习键不入；
 //     //                 「字根形在哪键」+「出字问首码」，区位号 11–55 只进组文案助记，SPEC-0004 §5.5）
 //     // kind='practice' 池取题练习：{pools:['chars'|'words2'|'words34'|'sentences'], seq?:'len'}，多池合并；
 //     //                 会话模式名 = pools 以 '+' 连接（+'@'+seq）；seq:'len'=轮内按码长升序（先简字后满码，#5）
 //     // kind='mistakes' 错词本取题（无额外字段；会话模式名 'mistakes'）
-//     // kind='rootTable' 字根总表页（五笔 86 降级形态，#6）：无额外字段、无会话模式；渲染器读课程 zones/roots
+//     // kind='rootTable' 字根总表兼容视图（课程包未接载时使用，#6）：无额外字段、无会话模式；渲染器读课程 zones/roots
 //     // drill 阶会话模式名恒为 'finaldrill'
 //   ],
 //   confus: [                  // 易混对（范式供给；练习页模式按钮与取题过滤皆由此驱动）
@@ -318,7 +314,8 @@ const WB_ZONE_GROUPS = WB_ZONES.map(z => ({
 }));
 const WB_LETTERS = Object.fromEntries(Object.entries(WB_ROOTS).map(([k, r]) =>
   [k, { name: r.name, forms: r.roots, ex: r.ex, note: `${r.zone}区${r.pos}位${r.note ? ' · ' + r.note : ''}` }]));
-const WB_KEY_NAMES = Object.fromEntries(Object.entries(WB_ROOTS).map(([k, r]) => [k, r.name]));
+const WB_ROOT_KEYS = Object.fromEntries(Object.entries(WB_ROOTS).flatMap(([k, r]) =>
+  r.roots.split(' ').filter(Boolean).map(root => [root, k])));
 
 const WUBI_COURSE = {
   scheme: 'wubi86', challengeSub: '每天一个小目标，七天练顺五笔拆字',
@@ -326,7 +323,7 @@ const WUBI_COURSE = {
     { kind: 'keys', view: 'roots', groups: WB_ZONE_GROUPS, letters: WB_LETTERS,
       name: '字根认知', sub: '25 键五区排布 · 点键看键上字根与例字',
       body: '五笔 86 的码取自字根：25 个取码键按「横、竖、撇、捺、折」五区排布（区位号 11–55 是助记编号，不入码），每键承载一组字根；Z 是学习键，不参与取码。点击任意键查看键名、键上字根与例字（例字码随资料包派生）。' },
-    { kind: 'drill', unit: 'wbkey', groups: WB_ZONE_GROUPS, roots: WB_KEY_NAMES,
+    { kind: 'drill', unit: 'wbkey', groups: WB_ZONE_GROUPS, roots: WB_ROOT_KEYS,
       name: '拆字操练', sub: '字根形在哪键 · 出字问首码（间隔重复）',
       body: '逐键间隔重复（SRS 单元 = 25 码键，Z 学习键不入）：一键题「字根形 X 在哪键」——一键多根是核心知识点，字根形到键的反表由字根总表派生；出字问首码（课程字的首根键），顺手把整条拆解打完。带 <b class="due-dot">●</b> 的键是到期待复习键（间隔重复调度）。' },
     { kind: 'practice', pools: ['chars'], seq: 'len',
@@ -354,8 +351,8 @@ const WUBI_COURSE = {
   ],
 };
 
-// 降级形态（v3/#6）：拆解课程包未就绪前的现役形态 — 单阶字根总表页、无挑战、空态直陈。
-// M3 收尾轨把真包接上后调 setWubiCourseReady() 翻转（SPEC-0004 §5.1-M3 文案翻转同批）。
+// ---- 五笔 86（全课程，§5.4–5.5，issue #13）----
+// 课程包未接载时保留兼容视图，加载失败由上层显示可重试状态。
 const WUBI_DEGRADED = {
   scheme: 'wubi86', form: 'rootTable', noChallenge: true,
   challengeSub: '',
@@ -366,7 +363,7 @@ const WUBI_DEGRADED = {
   confus: [], challenge: [],
   zones: WB_ZONES, roots: WB_ROOTS,
 };
-let wubiCourseReadyFlag = false;
+let wubiCourseReadyFlag = true; // M3：真包已出货，默认五阶；setWubiCourseReady(false) 可回落降级
 export function setWubiCourseReady(v = true) { wubiCourseReadyFlag = !!v; }
 export function wubiCourseReady() { return wubiCourseReadyFlag; }
 

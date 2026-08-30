@@ -5,15 +5,18 @@
 
 const PACKS = {
   wubi86:   { path: '../data/packs/wubi86.v1.json',       name: '五笔 86 字码表',  kb: 82 },
+  'wubi86-course': { path: '../data/packs/wubi86-course.v1.json', name: '五笔 86 课程拆解', kb: 62 },
   cangjie5: { path: '../data/packs/cangjie5.v1.json',     name: '仓颉单字码表',    kb: 269 },
   zhuyin:   { path: '../data/packs/zhuyin-tones.v1.json', name: '注音带调数据',    kb: 33 },
   jyutping: { path: '../data/packs/jyutping-tones.v1.json', name: '粤拼带调数据',  kb: 34 },
 };
 
 const mem = new Map();   // id → 表（就绪后内存常驻）
+const metas = new Map();
 const state = new Map(); // id → 'idle'|'loading'|'ready'|'error'
 
 const packState = (id) => state.get(id) || 'idle';
+const packMeta = (id) => metas.get(id) || null;
 
 async function loadPack(id) {
   const pack = PACKS[id];
@@ -24,6 +27,7 @@ async function loadPack(id) {
     const raw = require(pack.path);
     const table = {};
     for (const k of Object.keys(raw)) if (!k.startsWith('_')) table[k] = raw[k];
+    if (raw._meta) metas.set(id, raw._meta);
     mem.set(id, table);
     state.set(id, 'ready');
     return table;
@@ -70,7 +74,8 @@ async function prefetchPacks(ids) {
 // 测试用：清空装载状态
 function __resetForTest() {
   mem.clear();
+  metas.clear();
   state.clear();
 }
 
-module.exports = { PACKS, packState, loadPack, bindPack, lookupChars, packCached, prefetchPacks, __resetForTest };
+module.exports = { PACKS, packState, packMeta, loadPack, bindPack, lookupChars, packCached, prefetchPacks, __resetForTest };

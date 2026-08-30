@@ -9,7 +9,7 @@
 | 小鹤码 / flypy code | 一个小写双拼编码，每音节恰两键；零声母音节用双字母（爱=ad）或首字母+韵母键 |
 | 方案 (Scheme) | 一种可切换的输入法编码规则，共十二方案（双拼×5：小鹤/微软/搜狗/智能ABC/自然码，加全拼/注音/粤拼/仓颉/速成/五笔 86/五笔画），含接口 {id, name, paradigm, codeOf, planOf, layout, activate}；注册于方案注册表 |
 | 范式 (Paradigm) | 码的派生方式：py 派生（码是拼音的纯函数：双拼/全拼）vs 字表查询（码是 word 的查表函数：形码，已接入——仓颉/速成/五笔 86/五笔画） |
-| 数据包 (Data Pack) | 构建期从上游字典抽取的版本化紧凑 `{字: 码}` JSON（wubi86.v1 / cangjie5.v1 / zhuyin-tones.v1 / jyutping-tones.v1 / stroke.v1）；方案首次激活经 activate() 懒加载，内存缓存+失败重试；版本化文件名 + SW cache-first 为唯一持久层（不进 localStorage/ SHELL）；`_meta` 键内嵌出处与许可；速成/全拼/自然码无包；粤拼包经构建期简繁桥以简体为键（运行时零映射）；五笔画包截 GB2312 6,763 字、笔顺底本为 CNS11643（台标，方/火/必 类与大陆规范有微差） |
+| 数据包 (Data Pack) | 构建期从上游字典抽取的版本化紧凑 `{字: 码}` JSON（wubi86.v1 / wubi86-course.v1 / cangjie5.v1 / zhuyin-tones.v1 / jyutping-tones.v1 / stroke.v1）；方案首次激活经 activate() 懒加载，内存缓存+失败重试；版本化文件名 + SW cache-first 为唯一持久层（不进 localStorage/ SHELL）；`_meta` 键内嵌出处与许可；速成/全拼/自然码无包；粤拼包经构建期简繁桥以简体为键（运行时零映射）；五笔画包截 GB2312 6,763 字、笔顺底本为 CNS11643（台标，方/火/必 类与大陆规范有微差） |
 | 音节切分 | 把全拼串拆成音节序列（zhongguo → zhong+guo），贪心最长匹配 + 失败回溯 |
 | 词目 (Entry) | 规范形 `{ word, py(全拼), weight }` + 可选 `{ srcCode, srcScheme }`；code 绝不持久化，出题时由当前方案 codeOf 派生 |
 | 词库导入 (Import) | 解析本地文件为词目集合并存入浏览器，绝不上传 |

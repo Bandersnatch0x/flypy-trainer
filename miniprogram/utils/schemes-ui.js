@@ -28,7 +28,7 @@ const CARD_FEATURES = {
   jyutping: '六声调辨义 · 阴调单键、阳调同键双敲',
   cangjie: '字形拆成字母序列，熟字根即识码；速成取其首尾二码',
   quick: '速成 = 仓颉首尾二码，节奏更快',
-  wubi86: '字根查表出码，先认字根再自由练习',
+  wubi86: '五区字根 · 拆字逐步引导 · 词组 2+2',
 };
 
 // 卡片五层信息之④：课程形态标签（§5.1 状态行）
@@ -39,14 +39,16 @@ function courseFormOf(id) {
   return '五阶课程';
 }
 
-// 五笔 86 降级形态灰调标签全句（§5.1 / T5-D6）：标签直陈、不遮掩不劝退
+// 五笔 86 兼容视图标签：课程包接载后卡片显示五阶课程
 function cardTagOf(id) {
-  return id === 'wubi86' ? '字根总表 + 自由练习 · 暂无五阶课程' : '';
+  return '';
 }
 
-// 变化面裁定（§5.4）：形码隐藏二字词/多字词/整句（v3 形码只取单字，T2-D5）
+// 变化面裁定（§5.4）：形码隐藏多字词/整句；五笔 86 放宽课程池二字词
 function hiddenModesFor(scheme) {
-  return scheme && scheme.paradigm === 'shape' ? ['words2', 'words34', 'sentences'] : [];
+  if (!scheme || scheme.paradigm !== 'shape') return [];
+  if (scheme.id === 'wubi86') return ['words34', 'sentences'];
+  return ['words2', 'words34', 'sentences'];
 }
 
 // 切回态卡片摘要（§5.5 三态 1）：课程第 N 阶 · 错词 X 条；皆无则不显

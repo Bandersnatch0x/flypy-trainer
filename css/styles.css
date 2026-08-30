@@ -652,7 +652,7 @@ h2 { font-size: 1.12rem; font-weight: 600; margin: 28px 0 12px; color: var(--bon
   .kb.wide .key { min-width: min(24px, 6.5vw); }
   .kb.wide .key .sm { font-size: 13px; }
   .kb.wide .key .ym { font-size: 8px; }
-  /* 形码两字 tag 键宽内省略号截断（复用现有 ellipsis，T3-D3） */
+  /* 形码角标键宽内省略号截断（复用现有 ellipsis，T3-D3；五笔全列同纪律） */
   .kb:not(.kbmini) .key .ym, .kbmap .key .ym { max-width: 100%; }
 }
 

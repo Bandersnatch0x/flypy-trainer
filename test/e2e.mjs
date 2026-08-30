@@ -423,25 +423,30 @@ check('速成阶 1 含首尾码速认话术', await page.locator('#stages li:not
 // 切回小鹤收尾
 await switchScheme(page, 'flypy', 200);
 
-// 18. v3 #6：五笔 86 降级形态 —— 单字查表 / 字根总表页 / 自由练习 / 提示兜底
-await switchScheme(page, 'wubi86', 900); // 激活状态流：正在准备五笔 86 字码表（~82KB）→ 就绪
+// 18. v4 #13 M3：五笔 86 全课程 —— 拆解逐步引导 / 五阶+挑战 / 课程池二字词 2+2
+await switchScheme(page, 'wubi86', 1200); // 码表 + 课程包同批懒加载
 await page.goto(BASE + '/#/practice', { waitUntil: 'networkidle' });
 await page.click('input[name="hint"][value="full"]');
-await page.click('#modes button[data-mode="chars"]'); // 自由练习 = 单字取题（前序模式五笔可能不供给）
+await page.click('#modes button[data-mode="chars"]');
 await page.waitForTimeout(200);
 check('五笔取题为单字', await page.locator('#word').innerText().then(t => [...t].length === 1 && t !== '∅'));
 const wbHintB = await page.locator('#hint b').innerText().catch(async () => {
   console.log('DBG 五笔面板状态 word=' + JSON.stringify(await page.locator('#word').innerText())
     + ' hint=' + JSON.stringify(await page.locator('#hint').innerHTML())
-    + ' guide=' + JSON.stringify((await page.locator('#guide').innerText()).slice(0, 120))
-    + ' toast=' + JSON.stringify(await page.locator('#toast').innerText())
-    + ' settings=' + await page.evaluate(() => localStorage.getItem('flypy.v1.settings')));
+    + ' guide=' + JSON.stringify((await page.locator('#guide').innerText()).slice(0, 120)));
   return null;
 });
 check('五笔单字查表码（1–4 键）', !!wbHintB && /^[a-y]{1,4}$/.test(wbHintB));
 check('五笔引导为步骤话术', await page.locator('#guide').innerText().then(t => t.includes('第 1 步')));
-check('五笔 full 档展开该键字根候选表（§4.2 兜底）', await page.locator('#guide').innerText().then(t => t.includes('此键字根')));
-check('五笔键帽角标字根（G=王一）', await page.locator('#kb .key[data-key="g"] .ym').innerText().then(t => t.includes('王')));
+check('五笔课程字 full 档逐步引导（字根名）', await page.evaluate(async () => {
+  const m = await import('/js/schemes.js');
+  const s = m.getScheme('wubi86');
+  const w = document.querySelector('#word').innerText;
+  const p = s.planOf(s.codeOf({ word: w }), { word: w });
+  return p.keys.every(k => k.role === 'root' || k.role === '码键');
+}));
+check('五笔键帽角标字根全列（G=王戋五一）', await page.locator('#kb .key[data-key="g"] .ym').innerText().then(t => t === '王 戋 五 一'));
+check('五笔练习键盘 title 保全量', await page.locator('#kb .key[data-key="g"]').getAttribute('title').then(t => !!(t && t.includes('王 戋 五 一'))));
 check('五笔 Z 学习键描边单列', await page.locator('#kb .key[data-key="z"].special').count().then(n => n === 1));
 const wbWord = await page.locator('#word').innerText();
 const wbCode = await page.evaluate(async (w) => {
@@ -452,33 +457,27 @@ check('五笔码与码文本一致', wbCode === wbHintB);
 for (const ch of wbCode) await page.locator('#inbox').press(ch);
 await page.waitForTimeout(250);
 check('五笔整码输入推进', await page.locator('#sDone').innerText().then(t => t.startsWith('1/')));
-check('五笔多字词不取题（§3.4）', await page.evaluate(async () => {
+check('五笔课程池二字词可出题（中国 2+2）', await page.evaluate(async () => {
   const m = await import('/js/schemes.js');
   return m.getScheme('wubi86').codeOf({ word: '中国', py: 'zhong guo' });
-}).then(c => c === null));
-// 课程视图：字根总表页（无五阶/无 SRS/不入七日挑战，空态显式）
+}).then(c => c === 'khlg'));
+check('五笔下二字词模式可见', await page.locator('#modes button[data-mode="words2"]').evaluate(el => el.style.display !== 'none'));
+check('五笔仍藏多字词与整句', await page.evaluate(() => ['words34', 'sentences']
+  .every(m => document.querySelector(`#modes button[data-mode="${m}"]`).style.display === 'none')));
+// 课程视图：五阶 + 七日挑战
 await page.goto(BASE + '/#/course', { waitUntil: 'networkidle' });
-check('五笔无七日挑战卡', await page.locator('#stages li.challenge').count().then(n => n === 0));
-check('五笔课程视图 = 字根总表页', await page.locator('#stages li').first().innerText().then(t => t.includes('字根总表')));
-check('五笔形态边界空态显式', await page.locator('#stageBody').innerText().then(t => t.includes('无五阶课程') && t.includes('不入七日挑战')));
-check('五笔字根总表五区分组', await page.locator('#rootcats .rootcat').count().then(n => n === 5));
-check('五笔字根总表 25 键位', await page.locator('#rootcats .rootchip').count().then(n => n === 25));
-check('五笔键盘图 26 键', await page.locator('#kbmap .key').count().then(n => n === 26));
+check('五笔五阶+挑战卡渲染', await page.locator('#stages li').count().then(n => n === 6));
+check('五笔课程页脚注明本站教学口径', await page.locator('#view-course').innerText().then(t => t.includes('拆解为本站教学口径')));
+check('五笔阶 0 = 字根认知', await page.locator('#stages li:not(.challenge)').first().innerText().then(t => t.includes('字根认知')));
+check('五笔阶 0 五区分组', await page.locator('#rootcats .rootcat').count().then(n => n === 5));
+check('五笔阶 0 键位图 26 键', await page.locator('#kbmap .key').count().then(n => n === 26));
 await page.locator('#rootcats .rootchip').first().click();
 await page.waitForTimeout(150);
-check('五点键看键上字根与例字', await page.locator('#rootdetail').innerText().then(t => t.includes('键上字根') && t.includes('例字')));
-// 自由练习直达：回练习页单字出题
-await page.click('#goFree');
-await page.waitForTimeout(250);
-check('自由练习回到练习页', await page.evaluate(() => location.hash), '#/practice');
-check('自由练习取题仍为单字', await page.locator('#word').innerText().then(t => [...t].length === 1 && t !== '∅'));
-// 多字词模式：形码变化面隐藏（§5.4）；处理器仍在 —— 直接派发 click 验证池被 codeOf 全滤的显式空态
-check('五笔下二字词模式已隐藏', await page.locator('#modes button[data-mode="words2"]').evaluate(el => el.style.display === 'none'));
-await page.evaluate(() => document.querySelector('#modes button[data-mode="words2"]').click());
-await page.waitForTimeout(200);
-check('五笔多字词模式显式空态（仅取单字）', await page.locator('#guide').innerText().then(t => t.includes('仅取单字')));
-check('五笔空态不产生会话进度', await page.locator('#sDone').innerText().then(t => t === '0/0'));
-// 切回小鹤收尾
+check('五点键看字根与例字', await page.locator('#rootdetail').innerText().then(t => t.includes('例字')));
+await page.locator('#stages li:not(.challenge)').nth(1).click();
+await page.waitForTimeout(150);
+check('五笔阶 1 操练 25 码键（Z 不入）', await page.locator('#finalkeys button').count().then(n => n === 25));
+check('五笔阶 1 五区分组标题', await page.locator('#finalkeys .drillgroup').count().then(n => n === 5));
 await switchScheme(page, 'flypy', 200);
 
 // 19. v3 #7：方案库 UI —— #/schemes 十二卡三层分组 / 设置页摘要行 / 芯片弹层 Alt+S Esc / 气泡 / 形码藏模式 / 预下载 / 动效与 reduced-motion
@@ -500,10 +499,12 @@ check('速成卡紧邻仓颉卡', await page.locator('.schemegroup[data-group="s
 check('速成卡互注文案', await page.locator('.scard[data-scheme="quick"] .scard-feat').innerText().then(t => t.includes('仓颉首尾二码')));
 check('卡片迷你键盘预览渲染（注音显数字行）', await page.locator('.scard[data-scheme="zhuyin"] .kbmini .key[data-key="1"]').count().then(n => n === 1));
 check('卡片迷你键盘预览渲染（形码显字根角标）', await page.locator('.scard[data-scheme="cangjie"] .kbmini .key[data-key="d"] .ym').innerText().then(t => t === '木'));
+check('卡片迷你键盘五笔角标全列同源', await page.locator('.scard[data-scheme="wubi86"] .kbmini .key[data-key="g"] .ym').innerText().then(t => t === '王 戋 五 一'));
 check('卡片状态行 = 课程形态 + 数据状态', await page.locator('.scard[data-scheme="flypy"] .scard-state').innerText().then(t => t.includes('五阶课程') && t.includes('无需下载'))
   && await page.locator('.scard[data-scheme="quanpin"] .scard-state').innerText().then(t => t.includes('提速课程')));
-check('五笔卡灰调降级标签直陈', await page.locator('.scard[data-scheme="wubi86"] .formtag.gray').innerText().then(t => t.includes('暂无五阶课程'))
-  && await page.locator('.scard[data-scheme="wubi86"] .scard-feat').innerText().then(t => t.length > 0));
+check('五笔卡已去灰调降级标签', await page.locator('.scard[data-scheme="wubi86"] .formtag.gray').count().then(n => n === 0)
+  && await page.locator('.scard[data-scheme="wubi86"] .scard-feat').innerText().then(t => t.includes('拆字逐步引导')));
+check('五笔卡状态行 = 五阶课程', await page.locator('.scard[data-scheme="wubi86"] .scard-state').innerText().then(t => t.includes('五阶课程')));
 check('切回态卡片自带进度摘要', await page.locator('.scard[data-scheme="flypy"]').innerText().then(t => t.includes('课程第')));
 // 19b. 设置页：下拉废除 → 摘要行跳方案库
 await page.goto(BASE + '/#/settings', { waitUntil: 'networkidle' });

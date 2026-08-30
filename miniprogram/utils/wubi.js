@@ -1,13 +1,11 @@
-// 五笔 86 降级形态基元（SPEC-0003 §2/§4.1–4.2，issue #6）。
+// 五笔 86 基元（SPEC-0004 §5.4–5.5；兼容 §4.2 兜底，issue #13）。
 //
 // 字根总表为自写表（ADR-0005 先例）：键位归属是编码标准的公有事实，
 // 清单、分区与例字按公开资料自写，不内置任何上游文件；全部键名、
 // 键上字根与例字经 wubi86.v1 包逐条校验（在包内且首码落在该键）。
 // 站内命名一律通称「五笔 86」，商标性名称避让（T1-§4）。
 //
-// 降级形态（T3-D4）：无拆解数据 —— plan 只是扁平淡键序（role='码键'），
-// 提示 full 档兜底 = 全码键序 + 高亮当前键 + 展开该键字根候选表（§4.2）；
-// 教学侧只有字根总表页 + 自由练习，无五阶课程、无 SRS、不入七日挑战。
+// 课程包未接载时：plan 退回扁平淡键序（role='码键'），供失败态继续显示可恢复的基础练习。
 // Z 是「学习键」：不参与取码，正码无一含 z，布局上描边单列。
 
 // 五区 25 码键（Z 不参与取码，不入总表）；desc = 键位编号区间
@@ -50,4 +48,124 @@ const WB_ROOTS = {
   x: { name: '纟', zone: '折', pos: 5, tag: '纟 弓', roots: '纟 弓 匕 幺', note: '「母」字外框一类折形也在此键。', ex: ['经', '张', '比', '幼'] },
 };
 
-module.exports = { WB_ZONES, WB_ROOTS };
+const WB_LAST_NAMES = { 1: '横', 2: '竖', 3: '撇', 4: '捺', 5: '折' };
+const WB_STRUCT_NAMES = { 1: '左右', 2: '上下', 3: '杂合' };
+const WB_LEVEL_NAMES = { 1: '一级简码', 2: '二级简码', 3: '三级简码' };
+const WB_STROKE_OF_KEY = { g: '横', h: '竖', t: '撇', y: '捺', n: '折' };
+
+function rootNameOf(shape, rootNames) {
+  const s = String(shape || '');
+  return (rootNames && rootNames[s]) || s;
+}
+function idNoteOf(id) {
+  if (!id) return '';
+  const lastN = Number(id.last);
+  const structN = Number(id.struct);
+  const last = WB_LAST_NAMES[lastN] || String(id.last || '');
+  const struct = WB_STRUCT_NAMES[structN] || String(id.struct || '');
+  return [last ? `末笔${last}` : '', struct].filter(Boolean).join(' · ');
+}
+function firstKeyOfWubi(entry, table, code) {
+  return (entry && table && table[entry.word] && table[entry.word].keys?.[0]) || String(code || '')[0] || '';
+}
+
+function wubiWordCode(word, table) {
+  const chs = [...String(word || '')];
+  if (chs.length !== 2 || !table) return null;
+  let code = '';
+  for (const ch of chs) {
+    const keys = table[ch] && table[ch].keys;
+    if (!keys || keys.length < 2) return null;
+    code += keys.slice(0, 2);
+  }
+  return code;
+}
+function fallbackPlanOf(code) {
+  return {
+    keys: [...String(code || '')].map((ch) => ({ key: ch, label: ch.toUpperCase(), note: '', role: '码键' })),
+    groups: [],
+  };
+}
+function fullStepsOf(e, rootNames) {
+  const keys = String(e.keys || '');
+  const roots = e.roots || [];
+  const units = [];
+  if (e.kind === '键名') {
+    for (const k of keys) units.push({ key: k, label: rootNameOf(roots[0], rootNames), note: `键 ${k.toUpperCase()}`, role: 'root' });
+    if (units.length) units[0].note = `键名 · 同键连按 ${keys.length} 下`;
+    return units;
+  }
+  if (e.kind === '单笔画') {
+    for (let i = 0; i < keys.length; i++) {
+      const k = keys[i];
+      units.push(i < 2
+        ? { key: k, label: rootNameOf(roots[0], rootNames), note: i ? '同键再按' : `单笔画 · 键 ${k.toUpperCase()}`, role: 'root' }
+        : { key: k, label: '笔画代码', note: i === 2 ? `键 ${k.toUpperCase()}` : '固定 ll', role: 'root' });
+    }
+    return units;
+  }
+  if (e.kind === '成字字根') {
+    units.push({ key: keys[0], label: rootNameOf(roots[0], rootNames), note: `成字字根 · 键 ${keys[0].toUpperCase()}`, role: 'root' });
+    for (let i = 1; i < keys.length; i++) {
+      const k = keys[i];
+      const pos = i === keys.length - 1 ? '末笔' : i === 1 ? '首笔' : '次笔';
+      units.push({ key: k, label: `${pos}${WB_STROKE_OF_KEY[k] || ''}`, note: `键 ${k.toUpperCase()}`, role: 'root' });
+    }
+    return units;
+  }
+  const rootSteps = Math.min(roots.length, keys.length);
+  for (let i = 0; i < rootSteps; i++) {
+    units.push({ key, label, note: `键 ${key.toUpperCase()}`, role: 'root' });
+  }
+  if (e.id && keys.length === roots.length + 1) {
+    const idKey = String(e.id.key || '');
+    if (idKey) units.push({ key: idKey, label: `识别码 ${idKey.toUpperCase()}`, note: idNoteOf(e.id), role: 'root' });
+  }
+  return units;
+}
+function planOfWubi(code, entry, table, rootNames) {
+  const c = String(code || '');
+  const word = entry && entry.word;
+  if (word && [...word].length === 2 && table && [...word].every(ch => table[ch])) {
+    const keys = [];
+    const groups = [];
+    for (const ch of word) {
+      const units = fullStepsOf(table[ch], rootNames).slice(0, 2);
+      groups.push({ word: ch, start: keys.length, len: units.length });
+      keys.push(...units);
+    }
+    return { keys, groups };
+  }
+  const e = word && table ? table[word] : null;
+  if (!e || [...String(word)].length !== 1) return fallbackPlanOf(c);
+  if (c === e.keys) return { keys: fullStepsOf(e, rootNames), groups: [] };
+  if (c.length < e.keys.length) {
+    const level = WB_LEVEL_NAMES[c.length] || `${c.length} 键简码`;
+    const units = [...c].map((k, i) => (!e.kind && e.roots && i < e.roots.length && e.keys[i] === k
+      ? { key: k, label: rootNameOf(e.roots[i], rootNames), note: `键 ${k.toUpperCase()}`, role: 'root' }
+      : { key: k, label: `${level} ${k.toUpperCase()}`, note: '', role: 'root' }));
+    const last = units[units.length - 1];
+    if (last) {
+      const brief = last.label.startsWith(level) ? `全码 ${e.keys.toUpperCase()}` : `${level}，全码 ${e.keys.toUpperCase()}`;
+      last.note = last.note ? `${last.note} · ${brief}` : brief;
+    }
+    return { keys: units, groups: [] };
+  }
+  return fallbackPlanOf(c);
+}
+function bindWubiCourse(scheme, pack) {
+  const table = {};
+  for (const [k, v] of Object.entries(pack || {})) if (!k.startsWith('_')) table[k] = v;
+  scheme.courseTable = table;
+  scheme.rootNames = (pack && pack._meta && pack._meta.rootNames) || {};
+  const baseCodeOf = scheme.codeOf;
+  scheme.codeOf = (entry) => {
+    const word = entry && entry.word;
+    if (word && [...word].length === 2) return wubiWordCode(word, scheme.courseTable);
+    return baseCodeOf(entry);
+  };
+  scheme.planOf = (code, entry) => planOfWubi(code, entry, scheme.courseTable, scheme.rootNames);
+  return scheme;
+}
+
+module.exports = { WB_ZONES, WB_ROOTS, bindWubiCourse, firstKeyOfWubi, wubiWordCode, planOfWubi, rootNameOf, idNoteOf, fallbackPlanOf };

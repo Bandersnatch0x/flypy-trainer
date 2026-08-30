@@ -4,10 +4,8 @@
 // 每方案一份课程数据；每阶 = 课程数据 + 通用渲染器（渲染在 js/app.js，不含范式分支）。
 // {
 //   scheme: string,            // 方案 id
-//   form?: 'rootTable',        // 降级形态（五笔 86，issue #6）：单阶课程 = 字根总表页（〔规格推断〕8）——
-//                              //   stages 恰一阶 kind:'rootTable'（渲染器 js/app.js renderRootsPage，
-//                              //   zones/roots 挂字根总表数据）；无 SRS 操练、不入七日挑战
-//                              //   （noChallenge → 挑战卡不渲染，形态边界由页内空态直陈）、无易混对供给
+//   form?: 'rootTable',        // 兼容视图：课程包未接载时可显示字根总表
+//                              //   五笔课程包正常接载时使用完整五阶 stages
 //   challengeSub: string,      // 七日挑战卡副标文案
 //   stages: [                  // 恰 5 阶，形状固定；公共字段 name（阶名）/ sub（副标题）/ body（正文，'{n}'=错词数占位）
 //     // kind='keys'     键位图认知/诊断：{view:'map'} 键位说明图 | {view:'heat'} 弱键热力图（点键即弱键特训）
@@ -22,7 +20,7 @@
 //     // kind='practice' 池取题练习：{pools:['chars'|'words2'|'words34'|'sentences'], seq?:'len'}，多池合并；
 //     //                 会话模式名 = pools 以 '+' 连接（+'@'+seq）；seq:'len'=轮内按码长升序（先简字后满码，#5）
 //     // kind='mistakes' 错词本取题（无额外字段；会话模式名 'mistakes'）
-//     // kind='rootTable' 字根总表页（五笔 86 降级形态，#6）：无额外字段、无会话模式；渲染器读课程 zones/roots
+//     // kind='rootTable' 字根总表兼容视图（课程包未接载时使用，#6）：无额外字段、无会话模式；渲染器读课程 zones/roots
 //     // drill 阶会话模式名恒为 'finaldrill'
 //   ],
 //   confus: [                  // 易混对（范式供给；练习页模式按钮与取题过滤皆由此驱动）
@@ -257,19 +255,49 @@ const QUICK_COURSE = {
   stages: quickStages, confus: CJ_CONFUS, challenge: CJ_CHALLENGE('短码单字', '词组热身'),
 };
 
-// ---- 五笔 86（降级形态，§2/§4.1 五笔列，issue #6）----
-// 课程视图内只有一阶：字根总表（25 键 × 键上字根，五区分组）+ 自由练习直达（仅单字出题）。
-// 形态边界显式空态：无 SRS 操练阶、不入七日挑战（noChallenge → 挑战卡空态）、无易混对供给；
-// 五阶课程缺位由单阶形态直陈（页内空态文案）。
+// ---- 五笔 86（全课程：课程包接载后五阶，§5.4–5.5，issue #13）----
+// 课程包失败时由页面显示可重试状态。
+const WB_ZONE_GROUPS = WB_ZONES.map(z => ({
+  label: `${z.label} · 区位 ${z.desc}`,
+  desc: [...z.keys].map(k => `${k.toUpperCase()} ${WB_ROOTS[k].name}`).join(' '),
+  keys: [...z.keys],
+}));
+const WB_LETTERS = Object.fromEntries(Object.entries(WB_ROOTS).map(([k, r]) =>
+  [k, { name: r.name, forms: r.roots, ex: r.ex, note: `${r.zone}区${r.pos}位${r.note ? ' · ' + r.note : ''}` }]));
+const WB_ROOT_KEYS = Object.fromEntries(Object.entries(WB_ROOTS).flatMap(([k, r]) =>
+  r.roots.split(' ').filter(Boolean).map(root => [root, k])));
 const WUBI_COURSE = {
-  scheme: 'wubi86', form: 'rootTable', noChallenge: true,
-  challengeSub: '',
+  scheme: 'wubi86', challengeSub: '每天一个小目标，七天练顺五笔拆字',
   stages: [
-    { kind: 'rootTable', name: '字根总表', sub: '25 键 × 键上字根 · 自由练习仅单字',
-      body: '五笔 86 的码取自字根：25 个取码键按「横、竖、撇、捺、折」五区排布，每键承载一组字根。先认键——点击任意键查看键上字根与例字（例字码随资料包派生）；再到练习页自由练习：仅单字出题，全提示会给出整条键序，并展开当前键的字根候选表。' },
+    { kind: 'keys', view: 'roots', groups: WB_ZONE_GROUPS, letters: WB_LETTERS,
+      name: '字根认知', sub: '25 键五区排布 · 点键看键上字根与例字',
+      body: '五笔 86 的码取自字根：25 个取码键按「横、竖、撇、捺、折」五区排布（区位号 11–55 是助记编号，不入码），每键承载一组字根；Z 是学习键，不参与取码。点击任意键查看键名、键上字根与例字（例字码随资料包派生）。' },
+    { kind: 'drill', unit: 'wbkey', groups: WB_ZONE_GROUPS, roots: WB_ROOT_KEYS,
+      name: '拆字操练', sub: '字根形在哪键 · 出字问首码（间隔重复）',
+      body: '逐键间隔重复（SRS 单元 = 25 码键，Z 学习键不入）：一键题「字根形 X 在哪键」——一键多根是核心知识点。' },
+    { kind: 'practice', pools: ['chars'], seq: 'len',
+      name: '单字拆打', sub: 'plan=拆解步骤 · 先简字后满码',
+      body: '从内置高频字池逐字出题，轮内按码长升序。课程字按拆解表逐步引导。' },
+    { kind: 'practice', pools: ['words2'],
+      name: '词组', sub: '真词出题 · 二字词 2+2 连打',
+      body: '真词出题：二字词双字皆在课程池才可出题，词码 = 各字全码前两键连打（2+2）。' },
+    CJ_MISTAKES_STAGE,
   ],
-  confus: [], challenge: [],
-  zones: WB_ZONES, roots: WB_ROOTS,
+  confus: [
+    { label: '日/目 · 形近字根', note: '日 在 J、目 在 H：两字形近键位不同，辨在框内横画连断', role: 'root', keys: ['j', 'h'] },
+    { label: '禾/木 · 形近字根', note: '禾 在 T、木 在 S：禾 比 木 多一撇头', role: 'root', keys: ['t', 's'] },
+    { label: '刀/力 · 形近字根', note: '刀 在 V、力 在 L：力 出头、刀 不出', role: 'root', keys: ['v', 'l'] },
+    { label: '儿/几 · 形近字根', note: '儿 在 Q、几 在 M：几 有顶横、儿 无', role: 'root', keys: ['q', 'm'] },
+  ],
+  challenge: [
+    { tag: 'D1', label: '任意一轮热身', match: { any: true } },
+    { tag: 'D2', label: '拆字操练一轮', match: { stage: 1 } },
+    { tag: 'D3', label: '单字拆打一轮', match: { stage: 2 } },
+    { tag: 'D4', label: '词组一轮', match: { stage: 3 } },
+    { tag: 'D5', label: '形近对抗一轮', match: { prefix: 'confus' } },
+    { tag: 'D6', label: '限时冲刺一轮', match: { modes: ['sprint'] } },
+    { tag: 'D7', label: '混合综合一轮', match: { modes: ['mixed'] } },
+  ],
 };
 
 const COURSES = {

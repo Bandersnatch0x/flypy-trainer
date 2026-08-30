@@ -302,7 +302,7 @@ eq('新用户二迁返回 null', migrate(), null);
 const fs = await import('node:fs');
 const { BUILTIN: POOL } = await import('../js/data.js');
 const packs = await import('../js/packs.js');
-const { PACKS, loadPack, packState, bindPack, lookupChars, prefetchPacks, __resetForTest } = packs;
+const { PACKS, loadPack, packState, packMeta, bindPack, lookupChars, prefetchPacks, __resetForTest } = packs;
 
 // -- 工件：四份版本化紧凑 {字: 码}，内嵌出处与许可；速成/全拼/自然码无包 --
 const packDir = new URL('../data/packs/', import.meta.url);
@@ -339,6 +339,11 @@ eq('jyutping-tones _meta 上游指纹（字/词两表）', /^[0-9a-f]{64}$/.test
 eq('jyutping-tones _meta CanCLID 署名', jyutPack._meta.attribution.includes('CanCLID'), true);
 eq('jyutping-tones raw ≤500KB（验收 1 预算）', fs.statSync(new URL('jyutping-tones.v1.json', packDir)).size <= 500 * 1024, true);
 eq('jyutping-tones 条数与 _meta 一致', entriesOf(jyutPack).length, jyutPack._meta.entries);
+const wbCoursePack = readPack('wubi86-course.v1.json');
+eq('PACKS 登记课程拆解包', PACKS['wubi86-course'] && PACKS['wubi86-course'].url, '/data/packs/wubi86-course.v1.json');
+eq('wubi86-course 出货条目数与 _meta 一致', entriesOf(wbCoursePack).length, wbCoursePack._meta.entries);
+eq('wubi86-course 出货仅 human', entriesOf(wbCoursePack).every(w => wbCoursePack[w].src === 'human'), true);
+eq('wubi86-course 两层口径在案', !!(wbCoursePack._meta.caliber && wbCoursePack._meta.caliber.code && wbCoursePack._meta.caliber.decomp), true);
 eq('wubi86 = GB2312 6,763 常用字', entriesOf(wubiPack).length, 6763);
 eq('wubi86 键皆单字', entriesOf(wubiPack).every(w => [...w].length === 1), true);
 eq('wubi86 码域 a–y ≤4 键', entriesOf(wubiPack).every(w => /^[a-y]{1,4}$/.test(wubiPack[w])), true);
@@ -397,6 +402,7 @@ __resetForTest(); fetchLog = [];
 fetchImpl = () => jsonRes({ _meta: { id: 'cangjie5', license: 'LGPL-3.0' }, 日: 'a', 月: 'b' });
 const tab1 = await loadPack('cangjie5');
 eq('loadPack 跳过 _meta 键', tab1, { 日: 'a', 月: 'b' });
+eq('packMeta 另存出处头', packMeta('cangjie5'), { id: 'cangjie5', license: 'LGPL-3.0' });
 eq('loadPack 就绪态', packState('cangjie5'), 'ready');
 await loadPack('cangjie5');
 eq('内存缓存命中（不重复下载）', fetchLog.length, 1);
@@ -942,9 +948,12 @@ eq('wubi plan role=码键', pJian.keys.every(k => k.role === '码键'), true);
 eq('wubi plan label=键名（第 n 步话术料）', pJian.keys.map(k => k.label), ['Q', 'V', 'F', 'P']);
 eq('wubi plan groups 空', pJian.groups, []);
 
-// -- 布局：25 键角标字根 + Z 学习键单列 --
-eq('wubi 键帽主显字母/角标字根略', wb.layout.keyLabel('g'),
-  { main: 'G', sub: '王 一', title: `五笔 86 · 横区1位 · 键上字根：${WB_ROOTS.g.roots}` });
+// -- 布局：25 键角标字根全列 + Z 学习键单列（#13 M3：键帽不再用两字 tag）--
+eq('wubi 键帽主显字母/角标字根全列', wb.layout.keyLabel('g'),
+  { main: 'G', sub: '王 戋 五 一', title: '五笔 86 · 横区1位 · 键上字根：王 戋 五 一' });
+eq('wubi 键帽全列长于两字摘要（F）', wb.layout.keyLabel('f').sub, '土 士 二 干 十 寸 雨');
+eq('wubi 25 键角标皆为该键 roots 全列', Object.keys(WB_ROOTS).every((k) => wb.layout.keyLabel(k).sub === WB_ROOTS[k].roots), true);
+eq('wubi 键帽 title 保全量（截断兜底）', Object.keys(WB_ROOTS).every((k) => wb.layout.keyLabel(k).title.includes(WB_ROOTS[k].roots)), true);
 eq('wubi Z 学习键角标与描边', [wb.layout.keyLabel('z').sub, wb.layout.specialOf('z')], ['学习', '学习']);
 eq('wubi 取码键不描边', wb.layout.specialOf('g'), '');
 eq('wubi 26 键位无附键', wb.layout.ROWS.join('').length + wb.layout.extraKeys.length, 26);
@@ -962,12 +971,14 @@ eq('wubi rootHint 候选表 = 总表数据', wb.rootHint('g'), `此键字根：$
 eq('wubi rootHint 25 键皆有、Z 无', [...'abcdefghijklmnopqrstuvwxy'].every(k => wb.rootHint(k).startsWith('此键字根：')) && wb.rootHint('z') === '', true);
 eq('仓颉无 rootHint（走字根名引导，非兜底形态）', cj.rootHint, undefined);
 
-// -- 课程形态（SPEC-0004 §5.5 升级，#13）：拆解课程包未就绪 = 现役降级形态（v3/#6）；
-//    setWubiCourseReady() 翻转五阶（收尾轨接真包时调用；细目断言见文末 #13 专节）--
-const wbCourseDegraded = courseOf('wubi86');
-eq('wubi 默认降级形态（包未就绪：字根总表单阶、无挑战）',
-  [wbCourseDegraded.form, wbCourseDegraded.noChallenge, wbCourseDegraded.stages.length], ['rootTable', true, 1]);
-setWubiCourseReady();
+// -- 课程形态（SPEC-0004 §5.5 / #13 M3）：真包出货后默认五阶；setWubiCourseReady(false) 可回落降级 --
+eq('wubi 默认可回落降级形态', (() => {
+  setWubiCourseReady(false);
+  const d = courseOf('wubi86');
+  const got = [d.form, d.noChallenge, d.stages.length];
+  setWubiCourseReady(true);
+  return got;
+})(), ['rootTable', true, 1]);
 const wbCourse = courseOf('wubi86');
 eq('wubi 就绪翻转完整五阶（降级 form 字段去除）', [wbCourse.form, wbCourse.noChallenge, wbCourse.stages.length], [undefined, undefined, 5]);
 eq('wubi 五阶形态齐（字根认知/拆字操练/单字拆打/词组/易错）', wbCourse.stages.map(s => s.kind), ['keys', 'drill', 'practice', 'practice', 'mistakes']);
@@ -983,7 +994,11 @@ eq('内置高频字池 500 字全部可出五笔题', POOL.chars.every(({ w }) =
 // -- 命名边界：站内文案零商标性字样（通称「五笔 86」；署名面在 licenses 页，豁免）--
 const jsFiles = fs.readdirSync(new URL('../js/', import.meta.url)).filter(f => f.endsWith('.js')).map(f => 'js/' + f);
 const scanned = ['index.html', ...jsFiles].map(f => fs.readFileSync(new URL('../' + f, import.meta.url), 'utf8')).join('\n');
+const mpProductFiles = fs.readdirSync(new URL('../miniprogram/pages/', import.meta.url), { recursive: true })
+  .filter(f => f.endsWith('.wxml')).map(f => 'miniprogram/pages/' + f);
+const productCopy = ['index.html', ...mpProductFiles].map(f => fs.readFileSync(new URL('../' + f, import.meta.url), 'utf8')).join('\n');
 eq('命名边界：站内零「五笔字型/王码」', /五笔字型|王码/.test(scanned), false);
+eq('命名边界：产品面零上游名称', /CanCLID|rime-cantonese/.test(productCopy), false);
 eq('命名边界：方案名即通称', [wb.id, wb.name, Object.values(SCHEMES).find(s => s.id === 'wubi86').name], ['wubi86', '五笔 86', '五笔 86']);
 
 // ---- v3 #7：方案库 UI 数据模型（SPEC-0003 §5.1/§5.2/§5.4/§5.5，验收条目 17/20 的纯逻辑面）----
@@ -1021,12 +1036,13 @@ eq('五笔画卡文案 = 五键打字 · 形码第一步（#11 §3.4）', sui.CA
 eq('课程形态：五阶课程（双拼/仓颉/速成/五笔画/注音/粤拼/五笔 86）', ['flypy', 'mspy', 'zhuyin', 'jyutping', 'stroke', 'cangjie', 'quick', 'wubi86'].map(sui.courseFormOf),
   ['五阶课程', '五阶课程', '五阶课程', '五阶课程', '五阶课程', '五阶课程', '五阶课程', '五阶课程']);
 eq('课程形态：全拼 = 提速课程', sui.courseFormOf('quanpin'), '提速课程');
-eq('五笔灰调标签文案翻转前保持（收尾轨去「暂无五阶课程」，#13 课程面先行）', sui.cardTagOf('wubi86'), '字根总表 + 自由练习 · 暂无五阶课程');
+eq('五笔灰调标签文案已翻转（去「暂无五阶课程」）', sui.cardTagOf('wubi86'), '');
 eq('余方案无灰调标签', Object.keys(SCHEMES).filter(id => id !== 'wubi86').every(id => sui.cardTagOf(id) === ''), true);
 
 // -- 变化面：形码隐藏二字词/多字词/整句（条目 20 纯逻辑面，§5.4）--
-eq('形码隐藏三模式（五笔画/仓颉/速成/五笔）', ['stroke', 'cangjie', 'quick', 'wubi86'].every(id =>
+eq('形码隐藏三模式（五笔画/仓颉/速成）', ['stroke', 'cangjie', 'quick'].every(id =>
   JSON.stringify(sui.hiddenModesFor(SCHEMES[id])) === JSON.stringify(['words2', 'words34', 'sentences'])), true);
+eq('五笔放宽二字词、仍藏多字词与整句', sui.hiddenModesFor(SCHEMES.wubi86), ['words34', 'sentences']);
 eq('音码不隐藏（双拼/全拼/注音/粤拼）', ['flypy', 'quanpin', 'zhuyin', 'jyutping'].every(id => sui.hiddenModesFor(SCHEMES[id]).length === 0), true);
 
 // -- 切回态卡片摘要（条目 21 三态 1：课程第 N 阶 · 错词 X 条；五笔无课程阶不显课程段）--
@@ -1043,7 +1059,9 @@ eq('微软科普：o 引导零声母话术', sui.schemeHelpOf(SCHEMES.mspy).body
 eq('全拼科普 = 码即拼音', sui.schemeHelpOf(SCHEMES.quanpin).summary, '什么是全拼？');
 eq('注音标科普 = 声调成字', sui.schemeHelpOf(SCHEMES.zhuyin).body.includes('声调键'), true);
 eq('粤拼科普 = 六调键收尾 + 零冲突之因', sui.schemeHelpOf(SCHEMES.jyutping).summary === '什么是粤拼？' && sui.schemeHelpOf(SCHEMES.jyutping).body.includes('不含 q、v、x'), true);
-eq('形码科普 = 字形拆解 + 仅单字取题', sui.schemeHelpOf(SCHEMES.cangjie).body.includes('字形') && sui.schemeHelpOf(SCHEMES.wubi86).body.includes('仅单字'), true);
+eq('形码科普 = 字形拆解 + 仅单字取题（仓颉）', sui.schemeHelpOf(SCHEMES.cangjie).body.includes('字形') && sui.schemeHelpOf(SCHEMES.cangjie).body.includes('仅单字'), true);
+eq('五笔科普含词组 2+2', sui.schemeHelpOf(SCHEMES.wubi86).body.includes('2+2'), true);
+eq('五笔卡文案已翻转', sui.CARD_FEATURES.wubi86, '五区字根 · 拆字逐步引导 · 词组 2+2');
 eq('五笔画科普 = 五键 + 归类规则 + 形码第一步阶梯', sui.schemeHelpOf(SCHEMES.stroke).summary === '什么是五笔画？'
   && sui.schemeHelpOf(SCHEMES.stroke).body.includes('点归捺、提归横、带转折的笔画一律归折')
   && sui.schemeHelpOf(SCHEMES.stroke).body.includes('形码的第一步'), true);
@@ -1051,7 +1069,7 @@ eq('五笔画科普 = 五键 + 归类规则 + 形码第一步阶梯', sui.scheme
 // ---- v4 #13：五笔 86 全课程——引擎与课程面（SPEC-0004 §5.4–5.5，issue #13 轨道 B）----
 // 夹具包开发：真包由轨道 A 管线产出（形态 {roots, keys, kind?, id?, note?, src}），本轨以夹具注入。
 const wbFixture = JSON.parse(fs.readFileSync(new URL('fixture/wubi86-course.fixture.json', import.meta.url), 'utf8'));
-const { planOfWubi, wubiWordCode, rootNameOf, idNoteOf, fallbackPlanOf, bindWubiCourse } = wbm;
+const { planOfWubi, wubiWordCode, firstKeyOfWubi, rootNameOf, idNoteOf, fallbackPlanOf, bindWubiCourse } = wbm;
 const wbFxEntries = Object.entries(wbFixture).filter(([k]) => !k.startsWith('_'));
 const WB_FX_TABLE = Object.fromEntries(wbFxEntries);
 
@@ -1070,7 +1088,7 @@ eq('夹具与码表包一致（R1：包内最短码 = 全码或其前缀；一�
 eq('夹具 rootNames 皆变体形（不覆盖正形）',
   Object.entries(wbFixture._meta.rootNames).every(([v]) => !Object.values(WB_ROOTS).some(r => r.roots.split(/\s+/).includes(v) && r.name === v)), true);
 
-// -- 纯函数：2+2 词码派生（≥12 用例，验收 24/30）--
+eq('课程字首码取拆解全码（我：T，不取一级简码 Q）', firstKeyOfWubi({ word: '我' }, WB_FX_TABLE, 'q'), 't');
 const WB_WORD_CASES = [
   ['中国', 'khlg'], ['日子', 'jjbb'], ['日月', 'jjee'], ['子女', 'bbvv'], ['同学', 'mgip'],
   ['我国', 'trlg'], ['土地', 'fffb'], ['学好', 'ipvb'], ['和好', 'tkvb'], ['十一', 'fggg'],
@@ -1088,6 +1106,8 @@ eq('正形不经映射（日/十 原样）', [rootNameOf('日', wbFixture._meta.
 eq('识别码注记 = 末笔 · 结构（§5.5 例：末笔横 · 左右）',
   [idNoteOf({ last: 1, struct: 1 }), idNoteOf({ last: 2, struct: 2 }), idNoteOf({ last: 4, struct: 3 }), idNoteOf({ last: 5, struct: 1 })],
   ['末笔横 · 左右', '末笔竖 · 上下', '末笔捺 · 杂合', '末笔折 · 左右']);
+eq('识别码注记兼容字符串区位（真包 id.last 为 "1"）',
+  idNoteOf({ last: '1', struct: '1', key: 'g' }), '末笔横 · 左右');
 
 // -- planOf 双形态：未注入保持 §4.2 兜底 --
 eq('未注入：五笔 plan 保持 §4.2 兜底（role=码键、label=大写字母）',
@@ -1167,7 +1187,7 @@ const wbDrill = wbCourse.stages[1];
 eq('wubi 阶 1 = 拆字操练（wbkey 单元，Z 不入）', [wbDrill.kind, wbDrill.unit], ['drill', 'wbkey']);
 eq('wubi 阶 1 SRS 单元 = 25 码键',
   wbDrill.groups.flatMap(g => g.keys).sort().join(''), 'abcdefghijklmnopqrstuvwxy');
-eq('wubi 阶 1 供键名根（「字根形在哪键」反表）', [wbDrill.roots.g, wbDrill.roots.j, wbDrill.roots.n], ['王', '日', '已']);
+eq('wubi 阶 1 供字根形反查键（「字根形在哪键」反表）', [wbDrill.roots['王'], wbDrill.roots['日'], wbDrill.roots['已']], ['g', 'j', 'n']);
 eq('wubi 阶 2 = 单字拆打（chars@len，先简字后满码）',
   [stageModes(wbCourse.stages[2]), wbCourse.stages[2].body.includes('末笔 · 结构')], [['chars@len'], true]);
 eq('wubi 阶 3 = 词组真词出题（words2 池 + 2+2 口径文案）',
@@ -1240,7 +1260,7 @@ let installP = null;
 await runHandler('install', { waitUntil: (p) => { installP = p; } });
 await installP;
 const cacheName = (await globalThis.caches.keys())[0];
-eq('SW CACHE 串随版本纪律递增（v4 开发周期 #11 起 -dev9）', cacheName, 'helian-v0.0.3-dev9');
+eq('SW CACHE 串随版本纪律递增（v4 开发周期 #13 M3 -dev11）', cacheName, 'helian-v0.0.3-dev11');
 const shellKeys = [...cacheStores.get(cacheName).keys()];
 eq('packs.js / licenses.html / courses.js / zhuyin.js / jyutping.js / cangjie.js / wubi.js 入 SHELL', ['/js/packs.js', '/licenses.html', '/js/courses.js', '/js/zhuyin.js', '/js/jyutping.js', '/js/cangjie.js', '/js/wubi.js'].every(u => shellKeys.includes(u)), true);
 eq('#7 新视图 js/css 入 SHELL（审计-§8 纪律）', ['/js/schemes-ui.js', '/css/schemes.css'].every(u => shellKeys.includes(u)), true);

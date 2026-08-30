@@ -7,6 +7,7 @@
 
 export const PACKS = {
   wubi86:   { url: '/data/packs/wubi86.v1.json',       name: '五笔 86 字码表',  kb: 82 },
+  'wubi86-course': { url: '/data/packs/wubi86-course.v1.json', name: '五笔 86 课程拆解', kb: 62 },
   cangjie5: { url: '/data/packs/cangjie5.v1.json',     name: '仓颉单字码表',    kb: 269 },
   zhuyin:   { url: '/data/packs/zhuyin-tones.v1.json', name: '注音带调数据',    kb: 33 },
   jyutping: { url: '/data/packs/jyutping-tones.v1.json', name: '粤拼带调数据',  kb: 34 },
@@ -14,10 +15,12 @@ export const PACKS = {
 };
 
 const mem = new Map();      // id → 表（就绪后内存常驻）
+const metas = new Map();    // id → _meta（课程包 rootNames 等，不进查表键）
 const inflight = new Map(); // id → Promise（并发去重）
 const state = new Map();    // id → 'idle'|'loading'|'ready'|'error'
 
 export const packState = (id) => state.get(id) || 'idle';
+export const packMeta = (id) => metas.get(id) || null;
 
 export async function loadPack(id) {
   const pack = PACKS[id];
@@ -34,6 +37,7 @@ export async function loadPack(id) {
         const raw = await res.json();
         const table = {};
         for (const k of Object.keys(raw)) if (!k.startsWith('_')) table[k] = raw[k];
+        if (raw._meta) metas.set(id, raw._meta);
         mem.set(id, table);
         state.set(id, 'ready');
         return table;
@@ -99,6 +103,7 @@ export async function prefetchPacks(ids) {
 // 测试用：清空装载状态
 export function __resetForTest() {
   mem.clear();
+  metas.clear();
   inflight.clear();
   state.clear();
 }

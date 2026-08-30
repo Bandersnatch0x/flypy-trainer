@@ -27,7 +27,7 @@
     <view class="aline">纯本地工具：无账号、无网络请求、无数据上传。相册权限仅用于保存成绩海报。</view>
     <view class="aline">练习记录、词库与错词本全部保存在你的设备上。</view>
     <view class="aline">与网页版 helian 同源：同一套课程、统计与方案引擎。</view>
-    <view class="aline">形码与注音码表派生自 rime 输入法方案（仓颉/五笔/注音），许可 LGPL-3.0。</view>
-    <view class="aline">粤拼带调字表源自 CanCLID（rime-cantonese），许可 CC-BY-4.0。</view>
+    <view class="aline">形码与注音码表按对应许可证提供，许可说明见网页版出处页。</view>
+    <view class="aline">粤拼带调字表按 CC-BY-4.0 提供，署名信息见网页版出处页。</view>
   </view>
 </view>

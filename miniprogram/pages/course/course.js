@@ -1,6 +1,5 @@
 // 课程页：五阶数据驱动（§4.1）+ 七日挑战 + 键位图/热力/字根认知/操练。
-// 与 web 版 js/app.js §课程 对齐：进度 per-scheme（course.<scheme>），
-// 降级形态（五笔 86 字根总表页）不入七日挑战。
+// 课程包未接载时显示失败态，允许重试；进度 per-scheme。
 const { getScheme } = require('../../utils/schemes.js');
 const { store } = require('../../utils/store.js');
 const { courseOf, challengeMatch } = require('../../utils/courses.js');
@@ -19,10 +18,10 @@ Page({
   async onShow() {
     const settings = store.getSettings();
     this.scheme = getScheme(settings.scheme || 'flypy');
-    if (this.scheme.packId && !this.scheme.table) {
+    if ((this.scheme.packId && !this.scheme.table) || (this.scheme.coursePackId && !this.scheme.courseReady)) {
       try { await this.scheme.activate(); } catch { this.setData({ packMissing: true }); return; }
     }
-    this.setData({ kbRows: buildRows(this.scheme), packMissing: false });
+    this.setData({ kbRows: buildRows(this.scheme), packMissing: false, schemeId: this.scheme.id });
     this.stageIdx = store.getCourse(this.scheme.id).stage || 0;
     this.renderAll();
   },
@@ -39,7 +38,7 @@ Page({
     this.renderStage(course.stages[this.stageIdx] || course.stages[0]);
   },
 
-  // 七日挑战状态（谓词读范式课程数据；降级形态不入挑战）
+  // 七日挑战状态（谓词读范式课程数据；课程包失败时页面先显示重试）
   challengeVM(course) {
     if (course.noChallenge) return null;
     const ch = store.getChallenge();
@@ -119,7 +118,7 @@ Page({
   vmRootTable(st) {
     const course = courseOf(this.scheme.id);
     this.setData({
-      vm: { kind: 'roots', name: st.name, body: `${st.sub || ''} ${st.body || ''}`.trim(), letters: false, groups: this.chipGroups(course.zones), note: '本方案无五阶课程、无间隔重复操练，也不入七日挑战——先认字根，再自由练习。' },
+      vm: { kind: 'roots', name: st.name, body: `${st.sub || ''} ${st.body || ''}`.trim(), letters: false, groups: this.chipGroups(course.zones), note: '拆解为本站教学口径。' },
       heat: {}, keyDetail: '点击任意键或下方键位，查看键上字根与例字。',
     });
     this._roots = course.roots || {};

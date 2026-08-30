@@ -500,6 +500,7 @@ function ruleCheck(ch, entry, dict, truth, pack, annotations) {
   }
 
   // R2 取码数与识别码自洽
+  if (!entry.kind && clean.length < 2) errs.push('R2: 常规字根序列少于 2');
   if (clean.length >= 4) {
     const want = keyOfRoot(clean[0], dict) + keyOfRoot(clean[1], dict) + keyOfRoot(clean[2], dict) + keyOfRoot(clean[clean.length - 1], dict);
     if (keys !== want) errs.push(`R2: ≥4根应取 1/2/3/末=${want}，实得 ${keys}`);
@@ -521,6 +522,12 @@ function ruleCheck(ch, entry, dict, truth, pack, annotations) {
   if (ch in dict.keyNames) { expected = '键名'; expKeys = dict.keyNames[ch].repeat(4); }
   else if (ch in dict.SINGLE) { expected = '单笔画'; expKeys = dict.SINGLE[ch] + dict.SINGLE[ch] + 'll'; }
   else if (dict.isChengzi(ch)) { expected = '成字字根'; expKeys = chengziCode(ch, dict); }
+  // 码权威=源 dict 全码。成字规则码与全码不一致时（才 fte/fght、业 ogd/ohhg），
+  // 按全码作常规字，不当特型——教学与练习永不分叉（SPEC-0004 §5.2/§5.6）。
+  if (expected === '成字字根' && t?.full && expKeys && expKeys !== t.full) {
+    expected = null;
+    expKeys = null;
+  }
   if (expected) {
     if (entry.kind !== expected) errs.push(`R3: 特型应为「${expected}」，标注 ${entry.kind || '∅'}`);
     if (expKeys && keys !== expKeys) errs.push(`R3: 特型码应为 ${expKeys}，实得 ${keys}`);
@@ -737,7 +744,7 @@ async function cmdBuild() {
         code: '码权威 = 包内极点码表（rime/rime-wubi，LGPL-3.0，wubi86.v1.json）：一切 keys 与练习出码一致，不引入第二真值，教学与练习永不分叉。',
         decomp: '拆解 = 本站自写教学口径，遵循「取大优先 / 兼顾直观 / 能连不交」公开原则；键位归属是编码标准公有事实（自写表先例 ADR-0005）。拆字学派无单一开源权威，分歧字逐字裁定见 disputes。',
       },
-      attribution: '拆解标注自写（自有版权）；构建期候选参照 kfcd/chaizi（CC BY 3.0）、跨表码参照 KyleBing/rime-wubi86-jidian（Apache-2.0）——二者仅构建期使用，不随包分发其原数据。',
+      attribution: '拆解标注自写（自有版权）；构建期参照 aardio/wubi-lex（MIT）、kfcd/chaizi（CC BY 3.0）、跨表码参照 KyleBing/rime-wubi86-jidian（Apache-2.0）——三者仅构建期使用，不随包分发其原数据。',
       redline: '禁转抄唯一富拆解源 hantang/search-wubi（无 license、无授权链）：不可内置、不可转抄，其私用区字根字形不入仓不分发；若未来引用其展示思路，须自绘。',
       upstream: {
         srcDict: 'rime/rime-wubi — wubi86.dict.yaml', srcSha256: sha256(srcBuf),

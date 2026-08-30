@@ -15,7 +15,7 @@ function cardOf(id, curId) {
     summary: progressSummary(id),
     dataState: s.packId ? '随包内置 ✓' : '无需下载',
     isCur: id === curId,
-    degraded: id === 'wubi86',
+    degraded: false,
   };
 }
 

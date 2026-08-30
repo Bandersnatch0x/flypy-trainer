@@ -30,7 +30,10 @@
 .kbrow.wide .key { height: 76rpx; } /* 41 键大行（注音/仓颉）压低换密度 */
 .key.special { flex: 1.6; }
 .key .sm { font-size: 30rpx; line-height: 1.1; color: var(--text); }
-.key .ym { font-size: 18rpx; line-height: 1.1; color: var(--ghost); }
+.key .ym {
+  font-size: 18rpx; line-height: 1.1; color: var(--ghost);
+  max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+}
 .key.hover { background: #222; }
 .key.pressed { transform: scale(0.94); background: #24343a; border-color: var(--accent); }
 .key.cur { border-color: var(--accent); box-shadow: 0 0 12rpx rgba(0, 242, 255, 0.45); }

@@ -8,8 +8,8 @@ import { normalizeSyllable, splitSyllable, splitPinyin, YM as FLYPY_YM, SM_KEYS 
 import { ZY_ROWS, ZY_EXTRA_KEYS, ZM_OF_KEY, TONE_KEYS, TONE_MARKS, TONE_NAME, toZhuyin, keysOfToned, planOfToned } from './zhuyin.js';
 import { keysOfToned as jpKeysOfToned, planOfToned as jpPlanOfToned, JP_SM_KEYS, JP_YM_KEYS } from './jyutping.js';
 import { CJ_LETTERS, quickOf } from './cangjie.js';
-import { WB_ROOTS } from './wubi.js';
-import { bindPack } from './packs.js';
+import { WB_ROOTS, bindWubiCourse } from './wubi.js';
+import { bindPack, loadPack, packMeta } from './packs.js';
 
 const ROWS3 = ['qwertyuiop', 'asdfghjkl', 'zxcvbnm'];
 const ID = { i: 'i', u: 'u', v: 'v' };
@@ -331,10 +331,8 @@ function makeShapeScheme({ id, name, derive }) {
   return bindPack(scheme, 'cangjie5'); // 速成与仓颉共用同一份字表（零码表，§2）
 }
 
-// ---- 五笔 86（降级形态：字根总表 + 自由练习，SPEC-0003 §2/§4，issue #6）----
-// 码 = 单字查 wubi86 包（rime-wubi LGPL，GB2312 6,763 常用字）；多字词/缺码字 → null 被过滤（§3.4）。
-// 无拆解数据：plan role='码键'，full 档提示 = 全码键序 + 高亮当前键 + 该键字根候选表
-// （rootHint 与字根总表页同源取数，§4.2 兜底形态）。无课程阶、无 SRS 操练、不入七日挑战（T3-D4）。
+// ---- 五笔 86（全课程：码表包 + 拆解课程包同批懒加载，SPEC-0004 §5.4–5.5，issue #13 M3）----
+// 码权威仍是 wubi86 包；拆解包经 bindWubiCourse 升级 plan 双形态，并放宽课程池二字词 2+2。
 function makeWubi86() {
   const scheme = { id: 'wubi86', name: '五笔 86', paradigm: 'shape' };
   const codeOf = (entry) => {
@@ -348,7 +346,7 @@ function makeWubi86() {
   });
   const keyLabel = (ch) => {
     const R = WB_ROOTS[ch];
-    if (R) return { main: ch.toUpperCase(), sub: R.tag, title: `五笔 86 · ${R.zone}区${R.pos}位 · 键上字根：${R.roots}` };
+    if (R) return { main: ch.toUpperCase(), sub: R.roots, title: `五笔 86 · ${R.zone}区${R.pos}位 · 键上字根：${R.roots}` };
     return ch === 'z'
       ? { main: 'Z', sub: '学习', title: 'Z 学习键 · 不参与取码' }
       : { main: ch.toUpperCase(), sub: '', title: `键 ${ch.toUpperCase()}` };
@@ -361,9 +359,24 @@ function makeWubi86() {
   };
   // full 档字根候选表（§4.2）：与字根总表页共用 WB_ROOTS 一份数据
   scheme.rootHint = (ch) => (WB_ROOTS[ch] ? `此键字根：${WB_ROOTS[ch].roots}` : '');
-  scheme.activate = () => Promise.resolve(); // bindPack 覆写为 pack 装载
   scheme.YM = {}; scheme.SM_KEYS = {}; scheme.SM_NAME = {};
-  return bindPack(scheme, 'wubi86');
+  bindPack(scheme, 'wubi86');
+  scheme.coursePackId = 'wubi86-course';
+  const loadCode = scheme.activate;
+  scheme.activate = async () => {
+    const table = await loadCode();
+    try {
+      const course = await loadPack('wubi86-course');
+      bindWubiCourse(scheme, { ...course, _meta: packMeta('wubi86-course') });
+      scheme.courseReady = true;
+    } catch (err) {
+      scheme.courseReady = false;
+      scheme.courseTable = null;
+      throw err;
+    }
+    return table;
+  };
+  return scheme;
 }
 
 // ---- 五笔画（笔画输入）：标准 shape 单字查表（SPEC-0004 §3.2，issue #11）----
@@ -453,7 +466,7 @@ export const SCHEMES = {
   jyutping: makeJyutping(), // 粤拼：带调字表 + 六调键近恒等派生（SPEC-0004 §2，issue #10）
   cangjie: makeShapeScheme({ id: 'cangjie', name: '仓颉', derive: (full) => full }), // 深教样板（T3-D1/D2）
   quick: makeShapeScheme({ id: 'quick', name: '速成', derive: quickOf }), // 官方变体：首尾二码，复用全五阶（T3-D4）
-  wubi86: makeWubi86(), // 降级形态：字根总表 + 自由练习（T3-D4，issue #6）
+  wubi86: makeWubi86(), // 全课程；课程包不可用时仅保留兼容兜底
   stroke: makeStroke(), // 五笔画（笔画输入）：形码入门，标准 shape 单字查表（SPEC-0004 §3，issue #11）
 };
 

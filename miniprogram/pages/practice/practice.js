@@ -71,7 +71,7 @@ Page({
     engine.setScheme(this.scheme);
     engine.setToast(t => wx.showToast({ title: t, icon: 'none' }));
     let packMissing = false;
-    if (this.scheme.packId && !this.scheme.table) {
+    if ((this.scheme.packId && !this.scheme.table) || (this.scheme.coursePackId && !this.scheme.courseReady)) {
       wx.showLoading({ title: `正在准备${PACKS[this.scheme.packId].name}…` });
       try { await this.scheme.activate(); } catch { packMissing = true; }
       wx.hideLoading();

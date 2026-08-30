@@ -1,4 +1,4 @@
-// 五笔 86 基元（SPEC-0003 §2/§4.1–4.2 降级形态；SPEC-0004 §5.4–5.5 课程升级接缝，issue #6/#13）。
+// 五笔 86 基元（SPEC-0004 §5.4–5.5；兼容 §4.2 兜底，issue #13）。
 //
 // 字根总表为自写表（ADR-0005 先例）：键位归属是编码标准的公有事实，
 // 清单、分区与例字按公开资料自写，不内置任何上游文件；全部键名、
@@ -6,7 +6,7 @@
 // 站内命名一律通称「五笔 86」，商标性名称避让（T1-§4）。
 //
 // plan 双形态（SPEC-0004 §5.4，按有无拆解分流并存）：
-// - 未注入课程表：降级形态 —— plan 只是扁平淡键序（role='码键'），
+// - 未注入课程表：兼容兜底 —— plan 只是扁平淡键序（role='码键'），
 //   提示 full 档兜底 = 全码键序 + 高亮当前键 + 展开该键字根候选表（§4.2）；
 // - 注入课程表（bindWubiCourse 注入口，收尾轨接真包、单测注夹具）：课程字
 //   plan = 拆解步骤序列 {key, label:字根名, role:'root'}（与仓颉 plan 同形；
@@ -23,8 +23,8 @@ export const WB_ZONES = [
   { label: '折区', desc: '51–55', keys: ['n', 'b', 'v', 'c', 'x'] },
 ];
 
-// 25 键字根总表：键 → {name 键名, zone 区, pos 区内位, tag 键帽角标,
-// roots 键上字根, note 补充说明, ex 例字}。
+// 25 键字根总表：键 → {name 键名, zone 区, pos 区内位, tag 两字摘要（总表助记）,
+// roots 键上字根（键帽角标全列，#13 M3）, note 补充说明, ex 例字}。
 // 键名/键上字根/例字皆经 wubi86.v1 包校验：在包内且首码即该键（单测固化该事实）。
 export const WB_ROOTS = {
   g: { name: '王', zone: '横', pos: 1, tag: '王 一', roots: '王 戋 五 一', note: '「青」字头一类变体形也在此键。', ex: ['王', '玉', '青', '表'] },
@@ -74,9 +74,15 @@ export function rootNameOf(shape, rootNames) {
 // 识别码步注记料：末笔 · 结构（如「末笔横 · 左右」，§5.5）
 export function idNoteOf(id) {
   if (!id) return '';
-  const last = typeof id.last === 'number' ? WB_LAST_NAMES[id.last] || '' : String(id.last || '');
-  const struct = typeof id.struct === 'number' ? WB_STRUCT_NAMES[id.struct] || '' : String(id.struct || '');
+  const lastN = Number(id.last);
+  const structN = Number(id.struct);
+  const last = WB_LAST_NAMES[lastN] || String(id.last || '');
+  const struct = WB_STRUCT_NAMES[structN] || String(id.struct || '');
   return [last ? `末笔${last}` : '', struct].filter(Boolean).join(' · ');
+}
+
+export function firstKeyOfWubi(entry, table, code) {
+  return (entry && table && table[entry.word] && table[entry.word].keys?.[0]) || String(code || '')[0] || '';
 }
 
 // 词码 2+2 派生（§5.5 阶 3，~10 行运行时派生，quickOf 先例）：
@@ -132,12 +138,15 @@ function fullStepsOf(e, rootNames) {
     }
     return units;
   }
-  // 常规字：字根步 +（2–3 根）识别码步
-  for (let i = 0; i < roots.length; i++) {
-    units.push({ key: keys[i], label: rootNameOf(roots[i], rootNames), note: `键 ${keys[i].toUpperCase()}`, role: 'root' });
+  const rootSteps = Math.min(roots.length, keys.length);
+  for (let i = 0; i < rootSteps; i++) {
+    const key = keys[i];
+    const label = roots[i] ? rootNameOf(roots[i], rootNames) : `第 ${i + 1} 键`;
+    units.push({ key, label, note: `键 ${key.toUpperCase()}`, role: 'root' });
   }
   if (e.id && keys.length === roots.length + 1) {
-    units.push({ key: e.id.key, label: `识别码 ${e.id.key.toUpperCase()}`, note: idNoteOf(e.id), role: 'root' });
+    const idKey = String(e.id.key || '');
+    if (idKey) units.push({ key: idKey, label: `识别码 ${idKey.toUpperCase()}`, note: idNoteOf(e.id), role: 'root' });
   }
   return units;
 }
@@ -178,7 +187,7 @@ export function planOfWubi(code, entry, table, rootNames) {
 
 // 课程表注入口（§5.4）：把拆解包挂到 wubi86 方案 —— planOf 升级双形态、
 // codeOf 放宽课程池二字词（2+2 词码；§3.4 对 wubi86 的放宽，仓颉/速成维持仅单字）。
-// 不注册进 schemes.js / PACKS：收尾轨以真包 wubi86-course.v1 调用，单测注入夹具。
+// 收尾轨：schemes.js activate 接真包 wubi86-course.v1；单测注入夹具。
 export function bindWubiCourse(scheme, pack) {
   const table = {};
   for (const [k, v] of Object.entries(pack || {})) if (!k.startsWith('_')) table[k] = v;
