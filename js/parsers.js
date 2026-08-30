@@ -1,7 +1,9 @@
-// 四种词库格式的行级解析器 + 自动嗅探。产出统一词目 {word, py, code, weight}
-import { splitPinyin, toFlyPhrase } from './flypy.js';
+// 四种词库格式的行级解析器 + 自动嗅探。
+// v3 词目规范形 {word, py, weight} + 可选 {srcCode, srcScheme}（SPEC-0003 §3.3）：
+// code 绝不持久化，出题时由当前方案 codeOf 派生；py 是方案无关通货。
+import { splitPinyin } from './flypy.js';
 
-const CJK = /[\u4e00-\u9fff]/;
+export const CJK = /[\u4e00-\u9fff]/;
 
 function weightOf(s) {
   const n = Number(s);
@@ -20,14 +22,14 @@ export function parseUserdb(text) {
     const py = parts[0], word = parts.slice(1).join('');
     if (!CJK.test(word)) { bad.push(line); continue; }
     const m = meta.match(/c=(\d+)/);
-    // 优先按全拼切分；切不出且码长=2×字数，则视为双拼方案导出的小鹤码
+    // 优先按全拼切分；切不出且码长=2×字数，则视为双拼方案导出的码（归入 srcCode，srcScheme 待小鹤直用）
     const syls = splitPinyin(py);
     if (syls && syls.length === word.length) {
-      entries.push({ word, py: syls.join(' '), code: '', weight: m ? Number(m[1]) : 1 });
+      entries.push({ word, py: syls.join(' '), weight: m ? Number(m[1]) : 1 });
     } else if (/^[a-z]+$/.test(py) && py.length === 2 * word.length) {
-      entries.push({ word, py: '', code: py, weight: m ? Number(m[1]) : 1 });
+      entries.push({ word, py: '', srcCode: py, srcScheme: 'flypy', weight: m ? Number(m[1]) : 1 });
     } else {
-      entries.push({ word, py, code: '', weight: m ? Number(m[1]) : 1 });
+      entries.push({ word, py, weight: m ? Number(m[1]) : 1 });
     }
   }
   return { entries, bad, format: 'userdb.txt 同步快照' };
@@ -49,12 +51,12 @@ export function parseDictYaml(text) {
     if (!pyParts.length) { bad.push(line); continue; }
     const syls = pyParts;
     if (syls.length !== word.length || !syls.every(s => splitPinyin(s))) { bad.push(line); continue; }
-    entries.push({ word, py: syls.join(' '), code: '', weight: parts[1 + pyParts.length] ? weightOf(parts[1 + pyParts.length]) : 1 });
+    entries.push({ word, py: syls.join(' '), weight: parts[1 + pyParts.length] ? weightOf(parts[1 + pyParts.length]) : 1 });
   }
   return { entries, bad, format: 'dict.yaml 字典' };
 }
 
-// custom_phrase：`词 码 权重`，码已是小鹤码
+// custom_phrase：`词 码 权重`，码为小鹤双拼码（无拼音 → 归 srcCode，准入靠 srcCode 通道）
 export function parseCustomPhrase(text) {
   const entries = [], bad = [];
   for (const line of text.split(/\r?\n/)) {
@@ -64,14 +66,14 @@ export function parseCustomPhrase(text) {
     if (m) {
       const code = m[1], word = m[2].split(/\s+/)[0];
       if (/^[a-z]+$/i.test(code) && CJK.test(word)) {
-        entries.push({ word, py: '', code: code.toLowerCase(), weight: 1 });
+        entries.push({ word, py: '', srcCode: code.toLowerCase(), srcScheme: 'flypy', weight: 1 });
         continue;
       }
       bad.push(line); continue;
     }
     const parts = t.split(/\s+/);
     if (parts.length < 2 || !CJK.test(parts[0]) || !/^[a-z]+$/i.test(parts[1])) { bad.push(line); continue; }
-    entries.push({ word: parts[0], py: '', code: parts[1].toLowerCase(), weight: parts[2] ? weightOf(parts[2]) : 1 });
+    entries.push({ word: parts[0], py: '', srcCode: parts[1].toLowerCase(), srcScheme: 'flypy', weight: parts[2] ? weightOf(parts[2]) : 1 });
   }
   return { entries, bad, format: 'custom_phrase 短语' };
 }
@@ -91,9 +93,9 @@ export function parsePlain(text) {
       const joined = pyParts.join('');
       const syls = splitPinyin(joined);
       const wIdx = 1 + pyParts.length;
-      entries.push({ word, py: syls ? syls.join(' ') : pyParts.join(' '), code: '', weight: parts[wIdx] ? weightOf(parts[wIdx]) : 1 });
+      entries.push({ word, py: syls ? syls.join(' ') : pyParts.join(' '), weight: parts[wIdx] ? weightOf(parts[wIdx]) : 1 });
     } else {
-      bad.push(line); // 无拼音无法生成小鹤码
+      bad.push(line); // 无拼音：音码方案无法派生码
     }
   }
   return { entries, bad, format: '纯文本词表' };
@@ -107,23 +109,27 @@ export function sniffAndParse(filename, text) {
   return parsePlain(text);
 }
 
-// 按 word 聚合（权重求和），计算小鹤码；切分失败不计入
+// 按 word 聚合（权重求和）。不烘焙码（§3.3）：产出规范形 {word, py, weight}(+srcCode/srcScheme)。
+// 准入：word 为 CJK 且（py 可切分 或 有 srcCode）；不满足者计入 dropped。
 export function mergeEntries(lists) {
   const map = new Map();
-  let splitFails = 0;
+  let dropped = 0;
   for (const entries of lists) {
     for (const e of entries) {
-      const code = e.code || ((() => {
-        const syls = splitPinyin((e.py || '').replace(/\s+/g, ''));
-        return syls ? toFlyPhrase(syls.join(' ')) : '';
-      })());
-      if (!code) { splitFails++; continue; }
-      const hit = map.get(e.word);
-      if (hit) hit.weight += e.weight;
-      else map.set(e.word, { word: e.word, py: e.py || '', code, weight: e.weight });
+      const word = e && e.word;
+      if (!word || !CJK.test(word)) { dropped++; continue; }
+      const rawPy = String(e.py || '').trim();
+      const syls = rawPy ? splitPinyin(rawPy.replace(/\s+/g, '')) : null;
+      const srcCode = e.srcCode || (!syls && e.code ? String(e.code).toLowerCase() : '');
+      if (!syls && !srcCode) { dropped++; continue; }
+      const hit = map.get(word);
+      if (hit) { hit.weight += (e.weight || 1); continue; }
+      const entry = { word, py: syls ? syls.join(' ') : '', weight: e.weight || 1 };
+      if (!syls && srcCode) { entry.srcCode = srcCode; entry.srcScheme = e.srcScheme || 'flypy'; }
+      map.set(word, entry);
     }
   }
-  return { entries: [...map.values()], splitFails };
+  return { entries: [...map.values()], dropped };
 }
 
 // 加权随机抽题（不放回）：每轮重建前缀和 + 二分定位

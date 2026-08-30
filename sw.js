@@ -1,5 +1,5 @@
 // ADR-0007：壳资源 cache-first；同源非壳 network-first 回退缓存；字体 SWR
-const CACHE = 'helian-v2';
+const CACHE = 'helian-v0.0.3';
 const SHELL = ['/', '/index.html', '/css/styles.css', '/js/app.js', '/js/data.js', '/js/flypy.js', '/js/parsers.js', '/js/schemes.js', '/js/store.js', '/js/sound.js', '/js/share.js', '/manifest.webmanifest', '/icon.svg', '/og-image.svg'];
 
 self.addEventListener('install', (e) => {

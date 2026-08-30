@@ -1,13 +1,14 @@
 import { BUILTIN } from './data.js';
 import { getScheme, SCHEME_LIST, SCHEMES } from './schemes.js';
 import { sniffAndParse, mergeEntries, weightedSample, parsePlain } from './parsers.js';
-import { store } from './store.js';
+import { store, migrate } from './store.js';
 import { sound } from './sound.js';
 import { downloadShareCard } from './share.js';
 
+// v3 一次性幂等迁移：存量数据归 flypy 名下（§3.6），必须早于任何读取
+const MIGRATED = migrate();
+
 let scheme = getScheme(store.getSettings().scheme);
-let keyPlan = scheme.keyPlan, entryCode = scheme.entryCode, YM = scheme.YM,
-  SM_NAME = scheme.SM_NAME, ROWS = scheme.ROWS, extraKeys = scheme.extraKeys;
 
 const $ = (id) => /** @type {any} */ (document.getElementById(id));
 const qsa = (sel) => /** @type {NodeListOf<any>} */ (document.querySelectorAll(sel));
@@ -19,6 +20,7 @@ function toast(msg) {
   t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 2600);
 }
+if (MIGRATED === 'data') toast('历史本地数据已归入小鹤双拼名下');
 
 // ================= 路由 =================
 const VIEWS = ['practice', 'course', 'import', 'stats', 'mistakes', 'settings'];
@@ -35,29 +37,26 @@ function route() {
 }
 addEventListener('hashchange', route);
 
-// ================= 键盘图 =================
-let YM_LABEL = {};
+// ================= 键盘图（随方案 layout 重建）=================
 let keyEls = {};
-function rebuildYmLabel() {
-  YM_LABEL = {};
-  for (const [ym, k] of Object.entries(YM)) (YM_LABEL[k] ||= []).push(ym);
-}
-rebuildYmLabel();
 
 function buildKeyboard(container, { heat = false, map = false } = {}) {
   container.innerHTML = '';
   const els = {};
+  const { ROWS, extraKeys, keyLabel, specialOf } = scheme.layout;
   const rows = [...ROWS];
   if (extraKeys.length) rows.push(extraKeys.join(''));
   for (const row of rows) {
     const r = document.createElement('div');
     r.className = 'kbrow';
     for (const ch of row) {
+      const lab = keyLabel(ch);
+      const spec = specialOf(ch);
       const d = document.createElement('div');
-      d.className = 'key' + (Object.values(scheme.SM_KEYS).includes(ch) ? ' special' : '');
+      d.className = 'key' + (spec ? ' special' : '');
       d.dataset.key = ch;
-      d.innerHTML = `<span class="sm">${ch === ';' ? ';' : ch.toUpperCase()}</span><span class="ym">${(YM_LABEL[ch] || []).join('/')}</span>`;
-      if (map) d.title = `声母 ${SM_NAME[ch] || ch}｜韵母 ${(YM_LABEL[ch] || []).join(' / ') || '—'}`;
+      d.innerHTML = `<span class="sm">${esc(lab.main)}</span><span class="ym">${esc(lab.sub)}</span>`;
+      if (map) d.title = [spec ? `声母 ${spec}` : '', lab.sub ? `韵母 ${lab.sub}` : ''].filter(Boolean).join('｜') || `键 ${lab.main}`;
       els[ch] = d;
       r.appendChild(d);
     }
@@ -83,26 +82,38 @@ function buildKeyboard(container, { heat = false, map = false } = {}) {
 keyEls = buildKeyboard($('kb'));
 
 function applyScheme(id) {
-  scheme = getScheme(id);
-  keyPlan = scheme.keyPlan; entryCode = scheme.entryCode; YM = scheme.YM;
-  SM_NAME = scheme.SM_NAME; ROWS = scheme.ROWS; extraKeys = scheme.extraKeys;
-  rebuildYmLabel();
+  const next = getScheme(id);
+  if (next.id === scheme.id) return;
+  scheme = next;
   keyEls = buildKeyboard($('kb'));
   const s = store.getSettings();
   s.scheme = scheme.id;
   store.setSettings(s);
-  toast(`已切换：${scheme.name}`);
-  if (queue.length) next();
+  stageIdx = store.getCourse(scheme.id).stage || 0;
+  document.title = `鹤练 · ${scheme.name}练习`;
+  $('inbox').setAttribute('aria-label', `输入${scheme.name}编码`);
+  const sel = $('setScheme');
+  if (sel) sel.value = scheme.id;
+  // 练习中切换：立即重算 queue 重新出题（根治旧码残留，§5.4）
+  if (queue.length && idx < queue.length) {
+    toast(`已切换：${scheme.name} · 本轮重新出题`);
+    startSession(mode === 'finaldrill' ? 'chars' : mode);
+  } else {
+    toast(`已切换：${scheme.name}`);
+  }
 }
 
 function clearKeys(els = keyEls) {
-  for (const k of Object.values(els)) k.classList.remove('smhi', 'ymhi');
+  for (const k of Object.values(els)) {
+    k.classList.remove('smhi', 'ymhi');
+    delete k.dataset.n;
+  }
 }
 
-// ================= 练习引擎 =================
+// ================= 练习引擎（plan = 扁平键序，按下标寻址）=================
 const SESSION_LEN = 20;
 const SPRINT_SECS = 60;
-let queue = [], idx = 0, plans = [], expected = '', pos = 0;
+let queue = [], idx = 0, planKeys = [], expected = '', pos = 0, doneWords = 0;
 let startTime = 0, timer = null, correctKeys = 0, wrongKeys = 0;
 let mode = 'chars', drillKey = '', drillSeq = [], combo = 0, wrongInWord = false;
 let hintLevel = store.getSettings().hintLevel || 'full';
@@ -112,10 +123,10 @@ const SENTENCES = (() => { // 二字词连句（2-3 词）
   const out = [];
   const w = BUILTIN.words2;
   for (let i = 0; i + 1 < w.length; i += 2) {
-    out.push({ word: w[i].w + w[i + 1].w, py: `${w[i].p} ${w[i + 1].p}`, code: '', weight: 1 });
+    out.push({ word: w[i].w + w[i + 1].w, py: `${w[i].p} ${w[i + 1].p}`, weight: 1 });
   }
   for (let i = 0; i + 2 < w.length; i += 3) {
-    out.push({ word: w[i].w + w[i + 1].w + w[i + 2].w, py: `${w[i].p} ${w[i + 1].p} ${w[i + 2].p}`, code: '', weight: 1 });
+    out.push({ word: w[i].w + w[i + 1].w + w[i + 2].w, py: `${w[i].p} ${w[i + 1].p} ${w[i + 2].p}`, weight: 1 });
   }
   return out;
 })();
@@ -129,25 +140,25 @@ function confusKeys(triple) {
   const keys = [triple[1], triple[2]].map(n => scheme.SM_KEYS[n] || scheme.YM[n] || n);
   return { role, keys };
 }
-function entryTouchesKey(e, role, keys) {
-  return (e.py || '').split(/\s+/).some(s => {
-    const pl = keyPlan(s);
-    if (!pl) return false;
-    return role === 'sm' ? keys.includes(pl.smKey) : keys.includes(pl.ymKey);
-  });
+// 词条 plan 是否触达给定物理键（可限定 role）——方案无关
+function entryTouchesKey(e, keys, role) {
+  const code = scheme.codeOf(e);
+  if (!code) return false;
+  const plan = scheme.planOf(code, e);
+  return (plan?.keys || []).some(k => keys.includes(k.key) && (!role || k.role === role));
 }
 
 function poolFor(m) {
   const imported = store.getPool();
-  const mk = store.getMistakes();
-  const bi = (arr) => arr.map(({ w, p }) => ({ word: w, py: p, code: '', weight: 1 }));
+  const mk = store.getMistakes(scheme.id);
+  const bi = (arr) => arr.map(({ w, p }) => ({ word: w, py: p, weight: 1 }));
   if (m.startsWith('weak:')) {
     const k = m.slice(5);
-    return [...bi(BUILTIN.chars), ...imported].filter(e => entryTouchesKey(e, 'ym', [k]) || entryTouchesKey(e, 'sm', [k]));
+    return [...bi(BUILTIN.chars), ...imported].filter(e => entryTouchesKey(e, [k]));
   }
   if (m.startsWith('confus:')) {
     const { role, keys } = confusKeys(CONFUS[Number(m.slice(7)) || 0]);
-    return [...bi(BUILTIN.chars), ...bi(BUILTIN.words2)].filter(e => entryTouchesKey(e, role, keys));
+    return [...bi(BUILTIN.chars), ...bi(BUILTIN.words2)].filter(e => entryTouchesKey(e, keys, role === 'sm' ? 'sm' : 'ym'));
   }
   switch (m) {
     case 'chars': return bi(BUILTIN.chars);
@@ -157,16 +168,17 @@ function poolFor(m) {
     case 'sprint': case 'mixed':
       return mergeEntries([[...bi(BUILTIN.chars).slice(0, 200), ...bi(BUILTIN.words2).slice(0, 300)], imported]).entries;
     case 'personal': return imported;
-    case 'mistakes': return mk.map(({ word, py, code }) => ({ word, py, code, weight: 1 }));
+    case 'mistakes': return mk.map(({ word, py }) => ({ word, py: py || '', weight: 1 }));
   }
   return [];
 }
 
+// 出题：码由当前方案 codeOf 派生；plan 为扁平键序。不可派生 → null 被过滤
 function prepareEntry(e) {
-  const code = entryCode(e);
-  const syls = e.py ? e.py.split(/\s+/) : [];
-  const ps = syls.length === code.length / 2 ? syls.map(s => keyPlan(s)) : [];
-  return { word: e.word, py: e.py || '', code, plans: ps };
+  const code = scheme.codeOf(e);
+  if (!code) return null;
+  const plan = scheme.planOf(code, e);
+  return { word: e.word, py: e.py || '', code, plan };
 }
 
 function startSession(sourceMode) {
@@ -180,7 +192,9 @@ function startSession(sourceMode) {
     $('word').textContent = '∅';
     $('hint').textContent = '';
     $('guide').textContent = mode === 'personal' ? '还没有导入词库 —— 去「导入」页添加你的词库，或换别的模式'
-      : mode.startsWith('weak:') ? '该键还没有练习数据 —— 先练几轮' : '错词本是空的 —— 先去练一轮';
+      : mode.startsWith('weak:') ? '该键还没有练习数据 —— 先练几轮'
+      : mode === 'mistakes' ? '错词本是空的 —— 先去练一轮'
+      : '这个模式在当前方案下暂无可练内容 —— 换别的模式试试';
     $('inbox').value = '';
     $('inbox').blur();
     $('fb').textContent = '';
@@ -191,8 +205,8 @@ function startSession(sourceMode) {
   }
   const n = mode === 'sprint' ? Math.min(300, pool.length) : Math.min(SESSION_LEN, pool.length);
   const raw = weightedSample(pool, n);
-  queue = raw.map(prepareEntry).filter(e => e.code);
-  idx = 0; startTime = 0; correctKeys = 0; wrongKeys = 0;
+  queue = raw.map(prepareEntry).filter(Boolean);
+  idx = 0; doneWords = 0; startTime = 0; correctKeys = 0; wrongKeys = 0;
   $('sTime').textContent = mode === 'sprint' ? `0:${SPRINT_SECS}` : '0:00';
   $('sDone').textContent = mode === 'sprint' ? '0' : `0/${queue.length}`;
   $('sAcc').textContent = '100%'; $('sSpeed').textContent = '0';
@@ -206,13 +220,12 @@ function updateAcc() {
   $('sAcc').textContent = (total ? Math.round((correctKeys / total) * 100) : 100) + '%';
 }
 
-function guideText(plan) {
-  if (!plan) return '';
-  if (plan.zeroDouble) {
-    return `① 先按 <span class="g1">${plan.smKey.toUpperCase()}</span>，② 再按 <span class="g2">${plan.ymKey.toUpperCase()}</span> <span class="sub2">（单韵母 ${plan.ymName}，按两下）</span>`;
-  }
-  const smNote = SM_NAME[plan.smKey] ? `（${SM_NAME[plan.smKey]} 在 ${plan.smKey.toUpperCase()} 键）` : '';
-  return `① 先按 <span class="g1">${plan.smKey.toUpperCase()}</span> <span class="sub2">声母 ${plan.smName}${smNote}</span>&nbsp;&nbsp;② 再按 <span class="g2">${plan.ymKey.toUpperCase()}</span> <span class="sub2">韵母 ${plan.ymName}</span>`;
+// full 档话术：读 plan label（「第 n 步」，键数不限）
+function guideText() {
+  return planKeys.map((k, i) => {
+    const note = k.note ? ` <span class="sub2">（${esc(k.note)}）</span>` : '';
+    return `第 ${i + 1} 步 按 <span class="${i % 2 ? 'g2' : 'g1'}">${esc(k.label)}</span>${note}`;
+  }).join('&nbsp;&nbsp;');
 }
 
 function updateHighlight(p) {
@@ -220,14 +233,18 @@ function updateHighlight(p) {
   clearKeys();
   $('guide').innerHTML = '';
   if (hintLevel === 'none' || !settings.hlKeys) return;
-  const sylIdx = Math.floor(p / 2);
-  const plan = plans[sylIdx];
-  if (!plan) return;
-  const want = p % 2 === 0 ? plan.smKey : plan.ymKey;
-  const after = p % 2 === 0 ? plan.ymKey : (plans[sylIdx + 1]?.smKey ?? '');
-  if (keyEls[want]) keyEls[want].classList.add('smhi');
-  if (after && after !== want && keyEls[after]) keyEls[after].classList.add('ymhi');
-  if (hintLevel === 'full') $('guide').innerHTML = guideText(plan);
+  const cur = planKeys[p];
+  if (!cur) return;
+  const after = planKeys[p + 1];
+  if (keyEls[cur.key]) {
+    keyEls[cur.key].classList.add('smhi');
+    keyEls[cur.key].dataset.n = String(p + 1);
+  }
+  if (after && after.key !== cur.key && keyEls[after.key]) {
+    keyEls[after.key].classList.add('ymhi');
+    keyEls[after.key].dataset.n = String(p + 2);
+  }
+  if (hintLevel === 'full') $('guide').innerHTML = guideText();
 }
 
 function next() {
@@ -235,7 +252,7 @@ function next() {
   if (mode === 'sprint' && idx >= queue.length) idx = 0; // 冲刺循环取题
   const it = current();
   expected = it.code;
-  plans = it.plans;
+  planKeys = (it.plan && it.plan.keys) || [];
   pos = 0; wrongInWord = false;
   $('word').textContent = it.word;
   const settings = store.getSettings();
@@ -289,14 +306,14 @@ function finish() {
   const total = correctKeys + wrongKeys;
   const acc = total ? Math.round((correctKeys / total) * 100) : 100;
   const kpm = Math.round((total / secs) * 60);
-  store.addSession({ ts: Date.now(), mode, secs, acc, kpm, total });
+  store.addSession({ ts: Date.now(), mode, secs, acc, kpm, total, scheme: scheme.id, words: doneWords });
   adapt(acc);
   renderStreak();
   $('resgrid').innerHTML =
     `<div><b>${acc}%</b><span>准确率</span></div>` +
     `<div><b>${kpm}</b><span>键/分</span></div>` +
     `<div><b>${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}</b><span>用时</span></div>` +
-    `<div><b>${mode === 'sprint' ? Math.floor(total / 2) : queue.length}</b><span>词条</span></div>`;
+    `<div><b>${doneWords}</b><span>词条</span></div>`;
   $('result').classList.remove('hidden');
 }
 $('again').onclick = () => startSession(mode);
@@ -305,7 +322,8 @@ function trackWrongWord() {
   const it = current();
   if (it && !wrongWordsThisSession.has(it.word)) {
     wrongWordsThisSession.add(it.word);
-    store.addMistake({ word: it.word, py: it.py, code: it.code });
+    // 错词本弃码快照：存 {word, py, errPos}，回灌时按当前方案重派（§3.6）
+    store.addMistake(scheme.id, { word: it.word, py: it.py, errPos: pos });
   }
 }
 
@@ -398,7 +416,7 @@ function onInput() {
   if (!typed.length) return;
   const ch = typed[typed.length - 1];
   const ok = ch === expected[pos];
-  store.addKey(ch, ok);
+  store.addKey(scheme.id, ch, ok);
   const settings = store.getSettings();
   if (settings.sound) (ok ? sound.key : sound.miss)();
   if (ok) {
@@ -425,14 +443,15 @@ function onInput() {
       }
     }
     if (pos >= expected.length) {
+      doneWords++;
       if (mode === 'finaldrill' && drillSeq.length) {
-        for (const pl of plans) if (pl && drillSeq.includes(pl.ymKey)) store.srsTouch(pl.ymKey, !wrongInWord);
+        for (const k of planKeys) if (k.role === 'ym' && drillSeq.includes(k.key)) store.srsTouch(scheme.id, k.key, !wrongInWord);
       }
       if (mode === 'sprint') { combo++; $('sCombo').textContent = String(combo); }
       if (settings.sound) sound.hit();
       idx++;
       if (mode !== 'sprint') $('sDone').textContent = `${idx}/${queue.length}`;
-      else $('sDone').textContent = String(Math.floor((correctKeys + wrongKeys) / 2));
+      else $('sDone').textContent = String(doneWords);
       if (settings.keyImpact !== false) {
         const wEl = $('word');
         if (wEl) {
@@ -456,7 +475,9 @@ function onInput() {
     setTimeout(() => inbox.classList.remove('shake'), 130);
     const el = keyEls[ch];
     if (el) { el.classList.add('errflash'); setTimeout(() => el.classList.remove('errflash'), 120); }
-    $('fb').textContent = `这一键应是 ${expected[pos].toUpperCase()}`;
+    const want = planKeys[pos];
+    const note = want && want.note ? `（${want.note}）` : '';
+    $('fb').textContent = want ? `第 ${pos + 1} 步应是 ${want.key === ';' ? ';' : want.key.toUpperCase()}${note}` : '';
   }
   updateAcc();
 }
@@ -484,11 +505,11 @@ $('hintseg').addEventListener('change', (e) => { if (e.target.name === 'hint') s
 const STAGES = [
   ['键位认知', '一张图看懂当前方案键位'],
   ['韵母操练', '逐键建立韵母反射（间隔重复）'],
-  ['单字练习', '高频字两键输入'],
+  ['单字练习', '高频字码输入练习'],
   ['词组练习', '二字词连贯输入'],
   ['易错强化', '从你的错词本取题'],
 ];
-let stageIdx = store.getCourse().stage || 0;
+let stageIdx = store.getCourse(scheme.id).stage || 0;
 
 const CHALLENGE = [
   ['D1', '任意一轮热身', () => true],
@@ -519,7 +540,7 @@ function renderCourse() {
     const li = document.createElement('li');
     li.innerHTML = `<span>${i + 1}. ${name}<small>${sub}</small></span>`;
     li.classList.toggle('on', i === stageIdx);
-    li.onclick = () => { stageIdx = i; store.setCourse({ stage: i }); renderCourse(); };
+    li.onclick = () => { stageIdx = i; store.setCourse(scheme.id, { stage: i }); renderCourse(); };
     ol.appendChild(li);
   });
   // 七日挑战卡
@@ -545,20 +566,23 @@ function renderCourse() {
 
 function renderStage0(body) {
   store.markCourseSeen();
+  const spec = Object.entries(scheme.SM_NAME);
+  const specLine = spec.length
+    ? `翘舌声母换位见朱砂描边键（${scheme.name}：${spec.map(([k, v]) => `${v}→${k.toUpperCase()}`).join('、')}）。`
+    : '全拼的码就是拼音本身，键位即标准键盘。';
   body.innerHTML = `<h3>${scheme.name}键位全景</h3>
-    <p>每个键有两个角色：大字是声母位，小字是该键承载的韵母。
-    翘舌声母换位见朱砂描边键（${scheme.name}：${Object.entries(scheme.SM_NAME).map(([k, v]) => `${v}→${k.toUpperCase()}`).join('、')}）。
+    <p>大字是物理键位，小字是该键在当前方案下承载的韵母。${specLine}
     点击任意键查看说明。</p>
     <div class="kbmap" id="kbmap"></div>
     <div class="legend">
-      <span><i style="background:var(--cinnabar)"></i>① 声母键（先按）</span>
-      <span><i style="background:var(--bamboo)"></i>② 韵母键（后按）</span>
+      <span><i style="background:var(--cinnabar)"></i>当前要按的键</span>
+      <span><i style="background:var(--bamboo)"></i>下一键预告</span>
     </div>`;
   buildKeyboard($('kbmap'), { map: true });
 }
 
 function renderStage1(body) {
-  const due = store.srsDueKeys();
+  const due = store.srsDueKeys(scheme.id);
   body.innerHTML = `<h3>韵母操练</h3>
     <p>选一个韵母键反复练。带 <b class="due-dot">●</b> 的键是到期待复习键（间隔重复调度）。
     ${due.length ? `<button class="btn primary" id="dueBtn">先练 ${due.length} 个到期键</button>` : '<span class="sub2">暂无到期待复习键</span>'}</p>
@@ -566,10 +590,12 @@ function renderStage1(body) {
   if (due.length) $('dueBtn').onclick = () => startFinalDrill(due[0], due);
   const wrap = $('finalkeys');
   const groups = {};
-  for (const [ym, k] of Object.entries(YM)) (groups[k] ||= []).push(ym);
-  for (const k of 'qwrtyuiopsdfghjklzxcvbnm' + extraKeys.join('')) {
+  for (const [ym, k] of Object.entries(scheme.YM || {})) (groups[k] ||= []).push(ym);
+  // 键遍历派生自 layout（含 e/a 与附键，不再手写串）
+  const keys = [...scheme.layout.ROWS.join(''), ...scheme.layout.extraKeys];
+  for (const k of keys) {
     const yms = groups[k] || [];
-    if (!yms.length && !SM_NAME[k]) continue;
+    if (!yms.length && !scheme.layout.specialOf(k)) continue;
     const b = document.createElement('button');
     b.innerHTML = `${k === ';' ? ';' : k.toUpperCase()}<small>${yms.join('/') || '声母位'}</small>${due.includes(k) ? '<b class="due-dot">●</b>' : ''}`;
     b.onclick = () => {
@@ -579,21 +605,23 @@ function renderStage1(body) {
     };
     wrap.appendChild(b);
   }
+  if (!wrap.children.length) {
+    wrap.innerHTML = '<p class="sub">当前方案的操练内容建设中 —— 先去「练习」用内置池自由练习。</p>';
+  }
 }
 
 function startFinalDrill(k, keySeq) {
   mode = 'finaldrill';
   drillKey = k;
   drillSeq = keySeq || [k];
-  const seq = keySeq || [k];
   const hit = BUILTIN.chars
-    .map(({ w, p }) => ({ word: w, py: p, code: '', weight: 1 }))
-    .filter(e => e.py.split(/\s+/).some(s => { const pl = keyPlan(s); return pl && seq.includes(pl.ymKey); }));
+    .map(({ w, p }) => ({ word: w, py: p, weight: 1 }))
+    .filter(e => entryTouchesKey(e, drillSeq, 'ym'));
   if (timer) { clearInterval(timer); timer = null; }
   wrongWordsThisSession = new Set();
   const raw = weightedSample(hit, Math.min(SESSION_LEN, hit.length));
-  queue = raw.map(prepareEntry).filter(e => e.code);
-  idx = 0; startTime = 0; correctKeys = 0; wrongKeys = 0;
+  queue = raw.map(prepareEntry).filter(Boolean);
+  idx = 0; doneWords = 0; startTime = 0; correctKeys = 0; wrongKeys = 0;
   $('result').classList.add('hidden');
   $('sTime').textContent = '0:00'; $('sDone').textContent = `0/${queue.length}`;
   $('sAcc').textContent = '100%'; $('sSpeed').textContent = '0';
@@ -618,7 +646,7 @@ function renderStagePractice(body, m) {
 }
 
 function renderStage4(body) {
-  const n = store.getMistakes().length;
+  const n = store.getMistakes(scheme.id).length;
   body.innerHTML = `<h3>易错强化</h3>
     <p>错词本现有 <b>${n}</b> 条。答错的词会自动进错词本（上限 200 条），这里专门重练它们。</p>
     <button class="btn primary" id="goMk">${n ? '开始强化' : '错词本是空的'}</button>`;
@@ -650,7 +678,7 @@ function renderPacks() {
       if (subbed) return;
       const res = await fetch(`data/wordpacks/${p.file}.json`);
       const pack = await res.json();
-      const { entries } = mergeEntries([pack.entries.map(({ w, p: py }) => ({ word: w, py, code: '', weight: 5 }))]);
+      const { entries } = mergeEntries([pack.entries.map(({ w, p: py }) => ({ word: w, py, weight: 5 }))]);
       const r = store.addLib(`集市·${p.name}`, entries);
       if (r.ok) {
         store.setSubs([...subs, p.file]);
@@ -719,14 +747,14 @@ async function handleFiles(files) {
       lines.push(`<div class="line bad"><b>${esc(f.name)}</b> · 未识别出有效词条（按 ${r.format} 尝试）</div>`);
       continue;
     }
-    const { entries, splitFails } = mergeEntries([r.entries]);
+    const { entries, dropped } = mergeEntries([r.entries]);
     const res = store.addLib(f.name, entries);
     if (!res.ok) {
       lines.push(`<div class="line bad"><b>${esc(f.name)}</b> · 浏览器存储已满，删除旧词库后重试</div>`);
       continue;
     }
     lines.push(`<div class="line"><b>${esc(f.name)}</b> · ${r.format} · 读入 ${r.entries.length} 条，去重后 ${entries.length} 条入库` +
-      `${splitFails ? ` · <span class="bad">${splitFails} 条无法切分拼音未入库</span>` : ''} · 练习池现有 ${res.kept} 条</div>`);
+      `${dropped ? ` · <span class="bad">${dropped} 条无法切分拼音且无可用码未入库</span>` : ''} · 练习池现有 ${res.kept} 条</div>`);
   }
   lines.push('<div class="line">文件仅在你的浏览器内解析，未上传任何服务器。</div>');
   report.innerHTML = lines.join('');
@@ -783,21 +811,22 @@ function renderStats() {
   store.flushKeys();
   const sessions = store.getSessions();
   const streak = renderStreak();
+  // 连练天数/总时长跨方案聚合；PB 与徽章按方案过滤（不同码长的 kpm 不可比，§3.6）
+  const mine = sessions.filter(s => (s.scheme || 'flypy') === scheme.id);
   const tot = sessions.reduce((a, s) => { a.secs += s.secs; a.keys += s.total; return a; }, { secs: 0, keys: 0 });
-  const avgAcc = sessions.length ? Math.round(sessions.reduce((a, s) => a + s.acc, 0) / sessions.length) : 0;
-  const pbKpm = sessions.reduce((a, s) => Math.max(a, s.kpm), 0);
-  const pbAcc = sessions.reduce((a, s) => Math.max(a, s.acc), 0);
+  const pbKpm = mine.reduce((a, s) => Math.max(a, s.kpm), 0);
+  const pbAcc = mine.reduce((a, s) => Math.max(a, s.acc), 0);
   $('totals').innerHTML =
     `<div><b>${Math.round(tot.secs / 60)}</b><span>总分钟</span></div>` +
-    `<div><b>${pbKpm}</b><span>PB 键/分</span></div>` +
-    `<div><b>${pbAcc}%</b><span>PB 准确率</span></div>` +
+    `<div><b>${pbKpm}</b><span>PB 键/分 · ${scheme.name}</span></div>` +
+    `<div><b>${pbAcc}%</b><span>PB 准确率 · ${scheme.name}</span></div>` +
     `<div><b>${streak}</b><span>连练天数</span></div>`;
 
-  // 徽章墙
-  $('badges').innerHTML = computeBadges(sessions, streak).map(([name, got, desc]) =>
+  // 徽章墙（会话类徽章按当前方案过滤）
+  $('badges').innerHTML = computeBadges(mine, streak).map(([name, got, desc]) =>
     `<div class="badge${got ? ' got' : ''}" title="${desc}"><b>${name}</b><span>${got ? '已达成' : '未达成'}</span></div>`).join('');
 
-  // 键位日历（近一年）
+  // 键位日历（近一年，跨方案聚合）
   const days = store.getDays();
   const cal = $('calendar');
   cal.innerHTML = '';
@@ -812,7 +841,8 @@ function renderStats() {
     cal.appendChild(c);
   }
 
-  const ks = store.getKeyStats();
+  // 错键热力图：按方案隔离记账
+  const ks = store.getKeyStats(scheme.id);
   const heatEls = buildKeyboard($('kbheat'), { heat: true });
   for (const [k, [hit, err]] of Object.entries(ks)) {
     const el = heatEls[k];
@@ -841,7 +871,7 @@ function renderStats() {
     const last = sessions[sessions.length - 1];
     downloadShareCard({
       acc: last?.acc ?? 100, kpm: last?.kpm ?? 0, secs: last?.secs ?? 0,
-      words: Math.floor((last?.total ?? 0) / 2), schemeName: scheme.name, streak,
+      words: last?.words ?? 0, schemeName: scheme.name, streak,
     });
   };
 
@@ -850,7 +880,8 @@ function renderStats() {
   for (const s of sessions.slice(-100).reverse()) {
     const d = document.createElement('div');
     d.className = 'sess';
-    d.innerHTML = `<span>${new Date(s.ts).toLocaleString()}</span><span>${s.mode}</span><b>${s.acc}%</b><span>${s.kpm} 键/分</span><span>${s.secs}s</span>`;
+    const sname = getScheme(s.scheme || 'flypy').name;
+    d.innerHTML = `<span>${new Date(s.ts).toLocaleString()}</span><span>${sname}</span><span>${s.mode}</span><b>${s.acc}%</b><span>${s.kpm} 键/分</span><span>${s.secs}s</span>`;
     list.appendChild(d);
   }
   if (!sessions.length) list.innerHTML = '<div class="empty">还没有会话记录</div>';
@@ -858,7 +889,7 @@ function renderStats() {
 
 // ================= 错词本 =================
 function renderMistakes() {
-  const mk = store.getMistakes();
+  const mk = store.getMistakes(scheme.id);
   const box = $('mklist');
   box.innerHTML = '';
   if (!mk.length) {
@@ -870,20 +901,24 @@ function renderMistakes() {
   for (const m of mk.slice(0, 60)) {
     const d = document.createElement('div');
     d.className = 'mk';
-    d.innerHTML = `<span class="w">${esc(m.word)}</span><span class="c">${esc(m.code)}</span><span class="n">错 ${m.n} 次</span>`;
+    // 不存码快照：展示码按当前方案重派，派不出则显拼音
+    const shown = scheme.codeOf({ word: m.word, py: m.py, srcCode: m.srcCode, srcScheme: m.srcScheme }) || m.py || '—';
+    d.innerHTML = `<span class="w">${esc(m.word)}</span><span class="c">${esc(shown)}</span><span class="n">错 ${m.n} 次</span>`;
     box.appendChild(d);
   }
 }
 $('trainMistakes').onclick = () => gotoPractice('mistakes');
-$('clearMistakes').onclick = () => { store.clearMistakes(); renderMistakes(); };
+$('clearMistakes').onclick = () => { store.clearMistakes(scheme.id); renderMistakes(); };
 $('exportRime').onclick = () => {
   const fly = SCHEMES.flypy;
-  const mk = store.getMistakes();
+  const mk = store.getMistakes(scheme.id);
   const custom = store.getLibs().find(l => l.name === '自定义词单');
-  const lines = ['# Rime 自定义短语（鹤练导出 · 小鹤码）', '# 格式：词<TAB>码<TAB>权重；放入 rime 配置并挂载 custom_phrase'];
+  const lines = ['# Rime 自定义短语（鹤练导出 · 固定小鹤码）',
+    '# 格式：词<TAB>码<TAB>权重；放入 rime 配置并挂载 custom_phrase',
+    '# 注：导出码恒为小鹤双拼，与你当前练习方案无关'];
   const seen = new Set();
   for (const e of [...mk, ...(custom?.entries || [])]) {
-    const code = fly.entryCode(e);
+    const code = fly.codeOf(e);
     if (!code || seen.has(e.word)) continue;
     seen.add(e.word);
     lines.push(`${e.word}\t${code}\t1`);
@@ -914,7 +949,12 @@ for (const [id, key] of [['setPy', 'showPy'], ['setCode', 'showCode'], ['setHl',
     store.setSettings(s);
   });
 }
-$('setScheme').addEventListener('change', (e) => applyScheme(e.target.value));
+// 方案下拉由注册表驱动（新增方案零改 UI）
+{
+  const sel = $('setScheme');
+  sel.innerHTML = SCHEME_LIST.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+  sel.addEventListener('change', (e) => applyScheme(e.target.value));
+}
 $('hintSetGroup').addEventListener('change', (e) => { if (e.target.name === 'hintSet') setHintLevel(e.target.value); });
 $('resetAll').onclick = () => {
   if (confirm('确定重置全部本地数据？词库、统计、错词本都会清空。')) {
@@ -924,6 +964,8 @@ $('resetAll').onclick = () => {
 };
 
 // ================= 启动 =================
+document.title = `鹤练 · ${scheme.name}练习`;
+$('inbox').setAttribute('aria-label', `输入${scheme.name}编码`);
 qsa('input[name="hint"]').forEach(r => { r.checked = r.value === hintLevel; });
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 renderStreak();

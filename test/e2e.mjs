@@ -18,8 +18,12 @@ await page.goto(BASE + '/#/practice', { waitUntil: 'networkidle' });
 // 1. 练习页骨架
 check('标题含鹤练', await page.title().then(t => t.includes('鹤练')));
 check('目标字渲染', await page.locator('#word').innerText().then(t => t.trim().length > 0));
-check('键盘 26 键', await page.locator('#kb .key').count().then(n => n === 26));
-check('引导含①', await page.locator('#guide').innerHTML().then(h => h.includes('①')));
+const kbKeys = await page.evaluate(() => import('/js/schemes.js').then(m => {
+  const s = m.getScheme(JSON.parse(localStorage.getItem('flypy.v1.settings'))?.data?.scheme || 'flypy');
+  return s.layout.ROWS.join('').length + s.layout.extraKeys.length;
+}));
+check('键盘键数随布局', await page.locator('#kb .key').count().then(n => n === kbKeys));
+check('引导含第 1 步', await page.locator('#guide').innerHTML().then(h => h.includes('第 1 步')));
 
 // 2. 输错：抖动 + 提示应是哪键（先读正确码再挑一个错键）
 const code1 = await page.locator('#hint b').innerText();
@@ -45,7 +49,7 @@ check('仅按键档①高亮存在', await page.locator('#kb .key.smhi').count()
 // 5. 课程页
 await page.goto(BASE + '/#/course', { waitUntil: 'networkidle' });
 check('五阶课程+挑战卡渲染', await page.locator('#stages li').count().then(n => n === 6));
-check('键位全景图渲染', await page.locator('#kbmap .key').count().then(n => n === 26));
+check('键位全景图渲染', await page.locator('#kbmap .key').count().then(n => n === kbKeys));
 
 // 6. 导入：上传小型 userdb 快照
 const sample = 'jixu \u7ee7\u7eed\u0001c=12990 d=12990 t=150\nzhongguo \u4e2d\u56fd\u0001c=800 d=800 t=140\ndaima \u4ee3\u7801\u0001c=600 d=600 t=120\n';
@@ -114,6 +118,37 @@ await page.goto(BASE + '/#/course', { waitUntil: 'networkidle' });
 check('七日挑战卡', await page.locator('#stages li.challenge').count().then(n => n === 1));
 await page.goto(BASE + '/#/settings', { waitUntil: 'networkidle' });
 await page.selectOption('#setScheme', 'flypy');
+
+// 12. v3：新方案可切可练 + 练习中切换重算 queue
+await page.goto(BASE + '/#/practice', { waitUntil: 'networkidle' });
+await page.click('#modes button[data-mode="chars"]');
+await page.waitForTimeout(200);
+await page.evaluate(() => {
+  const sel = document.querySelector('#setScheme');
+  sel.value = 'quanpin';
+  sel.dispatchEvent(new Event('change'));
+});
+await page.waitForTimeout(300);
+check('练习中切换提示重新出题', await page.locator('#toast').innerText().then(t => t.includes('重新出题')));
+check('全拼码文本为拼音串', await page.locator('#hint b').innerText().then(t => /^[a-z]+$/.test(t)));
+check('全拼引导为步骤话术', await page.locator('#guide').innerText().then(t => t.includes('第 1 步')));
+const qpKbKeys = await page.evaluate(() => import('/js/schemes.js').then(m => {
+  const s = m.getScheme('quanpin');
+  return s.layout.ROWS.join('').length + s.layout.extraKeys.length;
+}));
+check('全拼键盘键数随布局', await page.locator('#kb .key').count().then(n => n === qpKbKeys));
+await page.evaluate(() => {
+  const sel = document.querySelector('#setScheme');
+  sel.value = 'ziranma';
+  sel.dispatchEvent(new Event('change'));
+});
+await page.waitForTimeout(300);
+check('自然码单字两键可练', await page.locator('#hint b').innerText().then(t => /^[a-z]{2}$/.test(t)));
+await page.evaluate(() => {
+  const sel = document.querySelector('#setScheme');
+  sel.value = 'flypy';
+  sel.dispatchEvent(new Event('change'));
+});
 
 await browser.close();
 console.log(`\n${pass} passed, ${fail} failed`);

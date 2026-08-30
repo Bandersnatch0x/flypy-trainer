@@ -1,5 +1,5 @@
-// 小鹤双拼引擎（移植自本地验证页，42 用例通过；新增全拼切分）
-// scheme 抽象口子：全部映射集中在 YM/SM_KEYS，未来换方案只需换表。
+// 拼音基元：小鹤键位表 + 音节切分 + 全拼合法音节表。
+// v3：编码派生一律走方案注册表（js/schemes.js 的 codeOf/planOf），本文件不再提供双轨编码函数。
 
 export const YM = {
   iu: 'q', ei: 'w', uan: 'r', er: 'r', ue: 't', ve: 't', un: 'y', uo: 'o', ie: 'p',
@@ -25,27 +25,6 @@ export function splitSyllable(syl) {
   return [null, syl];
 }
 
-export function keyPlan(sylIn) {
-  const syl = normalizeSyllable(sylIn);
-  if (!syl) return null;
-  const [sm, ym] = splitSyllable(syl);
-  if (!sm) {
-    if (/^[aoe]$/.test(syl)) {
-      return { smKey: syl, smName: syl, ymKey: syl, ymName: syl, code: syl + syl, zeroDouble: true };
-    }
-    const ymKey = YM[ym] || ym[0];
-    return { smKey: ym[0], smName: ym[0], ymKey, ymName: ym, code: ym[0] + ymKey };
-  }
-  const smKey = SM_KEYS[sm] || sm;
-  // jqxy 后的 u 实为 ü（剧=ju→jv）
-  const ym2 = 'jqxy'.includes(sm) && ym === 'u' ? 'v' : ym;
-  const ymKey = YM[ym2] || ym2;
-  return { smKey, smName: sm, ymKey, ymName: ym2, code: smKey + ymKey };
-}
-
-export const toFly = (syl) => keyPlan(syl)?.code ?? '';
-export const toFlyPhrase = (py) => py.trim().split(/\s+/).map(toFly).join('');
-
 // ---- 全拼合法音节表（无声调）----
 const SYL = ('a ai an ang ao ba bai ban bang bao bei ben beng bi bian biao bie bin bing bo bu ' +
   'ca cai can cang cao ce cen ceng cha chai chan chang chao che chen cheng chi chong chou chu ' +
@@ -55,7 +34,7 @@ const SYL = ('a ai an ang ao ba bai ban bang bao bei ben beng bi bian biao bie b
   'guan guang gui gun guo ha hai han hang hao he hei hen heng hong hou hu hua huai huan huang ' +
   'hui hun huo ji jia jian jiang jiao jie jin jing jiong jiu ju juan jue jun ka kai kan kang ' +
   'kao ke ken keng kong kou ku kua kuai kuan kuang kui kun kuo la lai lan lang lao le lei leng ' +
-  'li lia lian liang liao lie lin ling liu lo long lou lu lvan lue lun luo ma mai man mang mao ' +
+  'li lia lian liang liao lie lin ling liu lo long lou lu luan lue lun luo ma mai man mang mao ' +
   'me mei men meng mi mian miao mie min ming miu mo mou mu na nai nan nang nao ne nei nen neng ' +
   'ni nian niang niao nie nin ning niu nong nou nu nuan nve nun nuo o ou pa pai pan pang pao ' +
   'pei pen peng pi pian piao pie pin ping po pou pu qi qia qian qiang qiao qie qin qing qiong ' +
@@ -67,8 +46,8 @@ const SYL = ('a ai an ang ao ba bai ban bang bao bei ben beng bi bian biao bie b
   'yong you yu yuan yue yun za zai zan zang zao ze zei zen zeng zha zhai zhan zhang zhao zhe ' +
   'zhei zhen zheng zhi zhong zhou zhu zhua zhuai zhuan zhuang zhui zhun zhuo zi zong zou zu ' +
   'zuan zui zun zuo').split(' ');
-// 常见字母形式补全
-for (const s of ['lv', 'lve', 'nve', 'yu']) if (!SYL.includes(s)) SYL.push(s);
+// 常见字母形式补全 + §6 裁定补齐项（nv/kei/cei/sei/nue；m/n/ng 等叹词音节风险高不收）
+for (const s of ['lv', 'lve', 'nve', 'nv', 'yu', 'kei', 'cei', 'sei', 'nue']) if (!SYL.includes(s)) SYL.push(s);
 export const SYLLABLES = new Set(SYL);
 
 // 贪心最长匹配 + 回溯；失败返回 null
@@ -91,15 +70,4 @@ export function splitPinyin(code) {
     return res;
   };
   return solve(0);
-}
-
-// 词目 → 小鹤码。entry: {word, py?, code?}
-export function entryCode(entry) {
-  if (entry.code) return entry.code.toLowerCase();
-  if (entry.py) {
-    const syls = splitPinyin(entry.py.replace(/\s+/g, ''));
-    if (syls) return toFlyPhrase(syls.join(' '));
-    return toFlyPhrase(entry.py);
-  }
-  return '';
 }

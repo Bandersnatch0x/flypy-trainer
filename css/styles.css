@@ -267,7 +267,7 @@ h2 { font-size: 1.12rem; font-weight: 600; margin: 28px 0 12px; color: var(--bon
 .key.smhi::after, .key.ymhi::after {
   position: absolute; top: 2px; right: 3px; font-size: 10px; font-weight: 700;
 }
-.key.smhi::after { content: "①"; color: var(--ink); }
+.key.smhi::after { content: attr(data-n); color: var(--ink); }
 .key.ymhi {
   border-color: var(--bamboo); border-bottom-color: #658c71;
   background: linear-gradient(180deg, #242f28 0%, #17201b 100%);
@@ -275,7 +275,7 @@ h2 { font-size: 1.12rem; font-weight: 600; margin: 28px 0 12px; color: var(--bon
 }
 .key.ymhi .sm { color: var(--bamboo); font-weight: 700; }
 .key.ymhi .ym { color: #a4cca8; font-weight: 600; }
-.key.ymhi::after { content: "②"; color: var(--bamboo); }
+.key.ymhi::after { content: attr(data-n); color: var(--bamboo); }
 .key.pressed {
   transform: translateY(2px) scale(0.98); background: var(--raised);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05);
