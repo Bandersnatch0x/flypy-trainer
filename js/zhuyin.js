@@ -42,6 +42,7 @@ const ZCSR = new Set(['zh', 'ch', 'sh', 'r', 'z', 'c', 's']);
 // ---- 拼音→注音 xform 规则（规范化段，按序应用；对照注音音系自写转写）----
 // 规则 01 呣（m→mu）｜02 ê（eh→ㄝ 哨兵 E）｜03–05 y 头｜06–07 w 头｜
 // 08 jqx 后 u 实为 ü｜09–11 缩写还原 iu/ui/un
+/** @type {[RegExp, string][]} */
 const PY_XFORM = [
   [/^m$/, 'mu'],
   [/^eh$/, 'E'],
