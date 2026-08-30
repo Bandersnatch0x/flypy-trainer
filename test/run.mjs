@@ -384,6 +384,68 @@ eq('prefetch 无 SW 回落直连成功', (await prefetchPacks(['cangjie5'])).ok,
 eq('prefetch 命中 pack 地址', fetchLog, ['/data/packs/cangjie5.v1.json']);
 eq('prefetch 拒绝未知包', (await prefetchPacks(['nope'])).ok, false);
 
+// ---- v3 #3：课程数据化（SPEC-0003 §4.1 / §8 缺口 1，验收条目 9/12）----
+const { COURSES, courseOf, syllablesOf, confusKeys, confusEndsMatch, stageModes, challengeMatch } = await import('../js/courses.js');
+
+// -- schema 完整性：每方案一份、恰五阶、形状固定（供 #4/#5 依样产出）--
+eq('注册表六方案皆有课程数据', Object.keys(SCHEMES).every(id => COURSES[id] && COURSES[id].scheme === id), true);
+for (const c of Object.values(COURSES)) {
+  eq(`${c.scheme} 恰五阶`, c.stages.length, 5);
+  eq(`${c.scheme} 阶 kind 合法`, c.stages.every(s => ['keys', 'drill', 'practice', 'mistakes'].includes(s.kind)), true);
+  eq(`${c.scheme} 阶名/副标题齐`, c.stages.every(s => s.name && s.sub), true);
+  eq(`${c.scheme} 七日挑战七条`, c.challenge.length, 7);
+  eq(`${c.scheme} 易混对非空`, c.confus.length > 0, true);
+}
+
+// -- 双拼五变体复用骨架：五阶名称/六易混对/挑战谓词语义与硬编码时代等价 --
+const flyCourse = courseOf('flypy');
+eq('双拼五阶名称保持', flyCourse.stages.map(s => s.name), ['键位认知', '韵母操练', '单字练习', '词组练习', '易错强化']);
+eq('双拼五变体共用骨架', ['mspy', 'sogou', 'abc', 'ziranma'].every(id => COURSES[id].stages === COURSES.flypy.stages && COURSES[id].confus === COURSES.flypy.confus), true);
+eq('六易混对标签保持', flyCourse.confus.map(p => p.label), ['in/ing', 'an/ang', 'en/eng', 'zh/z', 'ch/c', 'sh/s']);
+eq('易混键位对经方案表映射（小鹤 in→b ing→k）', confusKeys(flyCourse.confus[0], fly), ['b', 'k']);
+eq('易混翘舌对经声母表（小鹤 zh→v）', confusKeys(flyCourse.confus[3], fly), ['v', 'z']);
+eq('挑战谓词 stage1=finaldrill（韵母操练一轮）', challengeMatch(flyCourse.challenge[1].match, 'finaldrill', flyCourse) && !challengeMatch(flyCourse.challenge[1].match, 'chars', flyCourse), true);
+eq('挑战谓词 stage2=chars（单字一轮）', challengeMatch(flyCourse.challenge[2].match, 'chars', flyCourse) && !challengeMatch(flyCourse.challenge[2].match, 'words2', flyCourse), true);
+eq('挑战谓词 stage3=words2（二字词一轮）', challengeMatch(flyCourse.challenge[3].match, 'words2', flyCourse), true);
+eq('挑战谓词 confus 前缀（易混对抗一轮）', challengeMatch(flyCourse.challenge[4].match, 'confus:5', flyCourse), true);
+eq('挑战谓词 sprint', challengeMatch(flyCourse.challenge[5].match, 'sprint', flyCourse) && !challengeMatch(flyCourse.challenge[5].match, 'mixed', flyCourse), true);
+eq('挑战谓词 mixed/sentences', challengeMatch(flyCourse.challenge[6].match, 'mixed', flyCourse) && challengeMatch(flyCourse.challenge[6].match, 'sentences', flyCourse), true);
+eq('挑战 D1 any 谓词', challengeMatch(flyCourse.challenge[0].match, 'chars', flyCourse), true);
+
+// -- 全拼课程（§4.1 全拼列，验收条目 12）--
+const qpCourse = courseOf('quanpin');
+eq('全拼阶 0 弱键诊断（键位图读热力图）', qpCourse.stages[0].kind === 'keys' && qpCourse.stages[0].view === 'heat', true);
+eq('全拼阶 1 音节操练（清单供给，SRS 维度不变）', qpCourse.stages[1].kind === 'drill' && qpCourse.stages[1].unit === 'syllable' && Array.isArray(qpCourse.stages[1].items), true);
+eq('全拼音节清单皆合法音节', qpCourse.stages[1].items.every(s => SYLLABLES.has(s)), true);
+eq('全拼音节清单无重复', new Set(qpCourse.stages[1].items).size === qpCourse.stages[1].items.length, true);
+eq('全拼每音节可从内置字池取题', qpCourse.stages[1].items.every(syl => POOL.chars.some(({ p }) => syllablesOf(p).includes(syl))), true);
+eq('全拼阶 2 词组提速 = words2 池', qpCourse.stages[2].pools, ['words2']);
+eq('全拼阶 3 长句用内置 words34 与 SENTENCES', [...qpCourse.stages[3].pools].sort(), ['sentences', 'words34']);
+eq('全拼阶 4 = 错词本取题', qpCourse.stages[4].kind, 'mistakes');
+eq('stageModes 操练阶 = finaldrill', stageModes(qpCourse.stages[1]), ['finaldrill']);
+eq('stageModes 练习阶 = pools 以 + 连接', stageModes(qpCourse.stages[3]), ['words34+sentences']);
+eq('全拼挑战 D4 命中合并模式名', challengeMatch(qpCourse.challenge[3].match, 'words34+sentences', qpCourse), true);
+eq('全拼易混对皆音节尾对', qpCourse.confus.every(p => Array.isArray(p.ends) && p.ends.length === 2), true);
+eq('音节尾对匹配前后鼻音', confusEndsMatch('shang', qpCourse.confus[1]) && confusEndsMatch('ban', qpCourse.confus[1]), true);
+eq('音节尾对非成员不匹配', confusEndsMatch('shi', qpCourse.confus[1]), false);
+eq('ian/iang 对覆盖 jian/jiang', confusEndsMatch('jian', qpCourse.confus[0]) && confusEndsMatch('jiang', qpCourse.confus[0]), true);
+eq('非音节尾对返回 null', confusEndsMatch('shi', flyCourse.confus[0]), null);
+for (const p of qpCourse.confus) {
+  const base = [...POOL.chars, ...POOL.words2];
+  const side = (t) => base.filter(e => syllablesOf(e.p).some(s => s.endsWith(t))).length;
+  eq(`全拼易混对 ${p.label} 两侧可取题`, side(p.ends[0]) > 0 && side(p.ends[1]) > 0, true);
+}
+
+// -- 课程进度 per-scheme（验收条目 9；拆键存储已在 §12 覆盖）--
+store.setCourse('flypy', { stage: 3 });
+eq('course.flypy 进度', store.getCourse('flypy'), { stage: 3 });
+eq('学完小鹤后切全拼进度从阶 0 起', store.getCourse('quanpin'), { stage: 0 });
+
+// -- syllablesOf（音节序列 = 方案无关通货）--
+eq('syllablesOf 空格分词', syllablesOf('zhong guo'), ['zhong', 'guo']);
+eq('syllablesOf 连写串切分', syllablesOf('zhongguo'), ['zhong', 'guo']);
+eq('syllablesOf 空', syllablesOf(''), []);
+
 // -- sw.js 单测（桩环境：classic worker 脚本按模块导入，globals 先就位）--
 const swHandlers = {};
 globalThis.self = {
@@ -417,9 +479,9 @@ let installP = null;
 await runHandler('install', { waitUntil: (p) => { installP = p; } });
 await installP;
 const cacheName = (await globalThis.caches.keys())[0];
-eq('SW CACHE 串随版本 bump', cacheName, 'helian-v0.0.4');
+eq('SW CACHE 串随版本 bump', cacheName, 'helian-v0.0.5');
 const shellKeys = [...cacheStores.get(cacheName).keys()];
-eq('packs.js 与 licenses.html 入 SHELL', ['/js/packs.js', '/licenses.html'].every(u => shellKeys.includes(u)), true);
+eq('packs.js / licenses.html / courses.js 入 SHELL', ['/js/packs.js', '/licenses.html', '/js/courses.js'].every(u => shellKeys.includes(u)), true);
 eq('pack 不进 SHELL（防 addAll 原子失败）', shellKeys.some(u => u.startsWith('/data/packs/')), false);
 
 const packUrlFull = 'http://localhost:4173/data/packs/cangjie5.v1.json';

@@ -1,5 +1,6 @@
 import { BUILTIN } from './data.js';
 import { getScheme, SCHEME_LIST, SCHEMES } from './schemes.js';
+import { courseOf, confusKeys, confusEndsMatch, syllablesOf, challengeMatch } from './courses.js';
 import { sniffAndParse, mergeEntries, weightedSample, parsePlain } from './parsers.js';
 import { store, migrate } from './store.js';
 import { sound } from './sound.js';
@@ -90,6 +91,8 @@ function applyScheme(id) {
   s.scheme = scheme.id;
   store.setSettings(s);
   stageIdx = store.getCourse(scheme.id).stage || 0;
+  buildConfusButtons(); // 易混对按范式课程数据重建
+  if (!$('view-course').classList.contains('hidden')) renderCourse();
   document.title = `鹤练 · ${scheme.name}练习`;
   $('inbox').setAttribute('aria-label', `输入${scheme.name}编码`);
   const sel = $('setScheme');
@@ -115,7 +118,7 @@ const SESSION_LEN = 20;
 const SPRINT_SECS = 60;
 let queue = [], idx = 0, planKeys = [], expected = '', pos = 0, doneWords = 0;
 let startTime = 0, timer = null, correctKeys = 0, wrongKeys = 0;
-let mode = 'chars', drillKey = '', drillSeq = [], combo = 0, wrongInWord = false;
+let mode = 'chars', drillKey = '', drillSeq = [], drillUnit = 'ymKey', combo = 0, wrongInWord = false;
 let hintLevel = store.getSettings().hintLevel || 'full';
 let wrongWordsThisSession = new Set();
 
@@ -131,15 +134,6 @@ const SENTENCES = (() => { // 二字词连句（2-3 词）
   return out;
 })();
 
-const CONFUS = [
-  ['ym', 'in', 'ing'], ['ym', 'an', 'ang'], ['ym', 'en', 'eng'],
-  ['sm', 'zh', 'z'], ['sm', 'ch', 'c'], ['sm', 'sh', 's'],
-];
-function confusKeys(triple) {
-  const role = triple[0];
-  const keys = [triple[1], triple[2]].map(n => scheme.SM_KEYS[n] || scheme.YM[n] || n);
-  return { role, keys };
-}
 // 词条 plan 是否触达给定物理键（可限定 role）——方案无关
 function entryTouchesKey(e, keys, role) {
   const code = scheme.codeOf(e);
@@ -157,8 +151,17 @@ function poolFor(m) {
     return [...bi(BUILTIN.chars), ...imported].filter(e => entryTouchesKey(e, [k]));
   }
   if (m.startsWith('confus:')) {
-    const { role, keys } = confusKeys(CONFUS[Number(m.slice(7)) || 0]);
-    return [...bi(BUILTIN.chars), ...bi(BUILTIN.words2)].filter(e => entryTouchesKey(e, keys, role === 'sm' ? 'sm' : 'ym'));
+    // 易混对由范式课程数据供给：键位对按 plan 触达过滤，音节尾对按音节结尾过滤（§4.1）
+    const pair = courseOf(scheme.id).confus[Number(m.slice(7)) || 0];
+    if (!pair) return [];
+    const base = [...bi(BUILTIN.chars), ...bi(BUILTIN.words2)];
+    if (pair.ends) return base.filter(e => confusEndsMatch(e.py, pair));
+    return base.filter(e => entryTouchesKey(e, confusKeys(pair, scheme), pair.role === 'sm' ? 'sm' : 'ym'));
+  }
+  if (m.includes('+') && !m.includes(':')) { // 课程练习阶多池合并（如 words34+sentences）
+    const seen = new Map();
+    for (const part of m.split('+')) for (const e of poolFor(part)) if (!seen.has(e.word)) seen.set(e.word, e);
+    return [...seen.values()];
   }
   switch (m) {
     case 'chars': return bi(BUILTIN.chars);
@@ -445,7 +448,12 @@ function onInput() {
     if (pos >= expected.length) {
       doneWords++;
       if (mode === 'finaldrill' && drillSeq.length) {
-        for (const k of planKeys) if (k.role === 'ym' && drillSeq.includes(k.key)) store.srsTouch(scheme.id, k.key, !wrongInWord);
+        // SRS 命中按操练单元维度：双拼=韵母键（plan role='ym'），全拼=音节（plan groups）
+        if (drillUnit === 'syllable') {
+          for (const g of (current().plan && current().plan.groups) || []) if (drillSeq.includes(g.syl)) store.srsTouch(scheme.id, g.syl, !wrongInWord);
+        } else {
+          for (const k of planKeys) if (k.role === 'ym' && drillSeq.includes(k.key)) store.srsTouch(scheme.id, k.key, !wrongInWord);
+        }
       }
       if (mode === 'sprint') { combo++; $('sCombo').textContent = String(combo); }
       if (settings.sound) sound.hit();
@@ -490,6 +498,18 @@ function setModeButton(m) {
 qsa('#modes button').forEach(b => {
   b.onclick = () => { setModeButton(b.dataset.mode); startSession(b.dataset.mode); };
 });
+// 易混对按钮由范式课程数据供给（音码=音系/拼写对；形码形近字母对由 #5 课程数据供，机制复用）
+function buildConfusButtons() {
+  qsa('#modes button[data-mode^="confus:"]').forEach(b => b.remove());
+  const anchor = $('modes').querySelector('button[data-mode="personal"]');
+  courseOf(scheme.id).confus.forEach((pair, i) => {
+    const b = document.createElement('button');
+    b.dataset.mode = `confus:${i}`;
+    b.textContent = pair.label;
+    b.onclick = () => { setModeButton(b.dataset.mode); startSession(b.dataset.mode); };
+    anchor.before(b);
+  });
+}
 function setHintLevel(level) {
   hintLevel = level;
   const s = store.getSettings();
@@ -501,55 +521,42 @@ function setHintLevel(level) {
 }
 $('hintseg').addEventListener('change', (e) => { if (e.target.name === 'hint') setHintLevel(e.target.value); });
 
-// ================= 课程 =================
-const STAGES = [
-  ['键位认知', '一张图看懂当前方案键位'],
-  ['韵母操练', '逐键建立韵母反射（间隔重复）'],
-  ['单字练习', '高频字码输入练习'],
-  ['词组练习', '二字词连贯输入'],
-  ['易错强化', '从你的错词本取题'],
-];
+// ================= 课程（数据驱动：每阶 = 范式课程数据 + 通用渲染器，§4.1）=================
+// 五阶形状固定，内容换课程数据；进度 per-scheme（course.<scheme>，接 #1 存储拆分）。
 let stageIdx = store.getCourse(scheme.id).stage || 0;
 
-const CHALLENGE = [
-  ['D1', '任意一轮热身', () => true],
-  ['D2', '韵母操练一轮', (m) => m === 'finaldrill'],
-  ['D3', '单字一轮', (m) => m === 'chars'],
-  ['D4', '二字词一轮', (m) => m === 'words2'],
-  ['D5', '易混对抗一轮', (m) => m.startsWith('confus')],
-  ['D6', '限时冲刺一轮', (m) => m === 'sprint'],
-  ['D7', '混合综合一轮', (m) => m === 'mixed' || m === 'sentences'],
-];
 function challengeState() {
   const ch = store.getChallenge();
   if (!ch) return null;
+  const course = courseOf(scheme.id);
   const sessions = store.getSessions();
   const days = store.getDays();
-  return CHALLENGE.map((item, i) => {
-    const match = /** @type {(m: string) => boolean} */ (item[2]);
+  return course.challenge.map((item, i) => {
     const day = new Date(ch.start + i * 86400000).toDateString();
-    const done = i === 0 ? !!days[day]?.course : sessions.some(s => new Date(s.ts).toDateString() === day && match(s.mode));
-    return { tag: item[0], label: item[1], done };
+    const done = i === 0 ? !!days[day]?.course
+      : sessions.some(s => new Date(s.ts).toDateString() === day && challengeMatch(item.match, s.mode, course));
+    return { tag: item.tag, label: item.label, done };
   });
 }
 
 function renderCourse() {
+  const course = courseOf(scheme.id);
   const ol = $('stages');
   ol.innerHTML = '';
-  STAGES.forEach(([name, sub], i) => {
+  course.stages.forEach((st, i) => {
     const li = document.createElement('li');
-    li.innerHTML = `<span>${i + 1}. ${name}<small>${sub}</small></span>`;
+    li.innerHTML = `<span>${i + 1}. ${st.name}<small>${st.sub}</small></span>`;
     li.classList.toggle('on', i === stageIdx);
     li.onclick = () => { stageIdx = i; store.setCourse(scheme.id, { stage: i }); renderCourse(); };
     ol.appendChild(li);
   });
-  // 七日挑战卡
+  // 七日挑战卡（谓词读范式课程数据，〔规格推断〕6）
   const card = document.createElement('li');
   card.className = 'challenge';
   const st = challengeState();
   if (!st) {
-    card.innerHTML = `<span>七日挑战<small>每天一个小目标，七天入门双拼</small></span>`;
-    card.onclick = () => { store.startChallenge(); toast('七日挑战开始！今天：任意一轮热身'); renderCourse(); };
+    card.innerHTML = `<span>七日挑战<small>${course.challengeSub}</small></span>`;
+    card.onclick = () => { store.startChallenge(); toast(`七日挑战开始！今天：${course.challenge[0].label}`); renderCourse(); };
   } else {
     const today = Math.min(6, Math.floor((Date.now() - store.getChallenge().start) / 86400000));
     card.innerHTML = `<span>七日挑战 · 第 ${today + 1} 天：${st[today].label}<small>${st.map(d => d.done ? '✓' : '·').join(' ')}</small></span>`;
@@ -558,14 +565,32 @@ function renderCourse() {
 
   const body = $('stageBody');
   body.innerHTML = '';
-  if (stageIdx === 0) renderStage0(body);
-  else if (stageIdx === 1) renderStage1(body);
-  else if (stageIdx === 4) renderStage4(body);
-  else renderStagePractice(body, stageIdx === 2 ? 'chars' : 'words2');
+  renderStage(body, course.stages[stageIdx]);
 }
 
-function renderStage0(body) {
+function renderStage(body, st) {
+  if (st.kind === 'keys') renderStageKeys(body, st);
+  else if (st.kind === 'drill') renderStageDrill(body, st);
+  else if (st.kind === 'mistakes') renderStageMistakes(body, st);
+  else renderStagePractice(body, st);
+}
+
+// kind='keys'：view='map' 键位说明图（双拼）；view='heat' 弱键热力图（全拼，点键特训）
+function renderStageKeys(body, st) {
   store.markCourseSeen();
+  if (st.view === 'heat') {
+    body.innerHTML = `<h3>${st.name}</h3><p>${st.body}</p><div class="kbmap" id="kbmap"></div>`;
+    const els = buildKeyboard($('kbmap'), { heat: true });
+    const ks = store.getKeyStats(scheme.id);
+    for (const [k, [hit, err]] of Object.entries(ks)) {
+      const el = els[k];
+      if (!el || !hit) continue;
+      const rate = err / hit;
+      if (err) el.style.background = `rgba(196, 87, 78, ${Math.min(0.9, rate * 2.2).toFixed(2)})`;
+      el.title = `${k.toUpperCase()}：${hit} 次，错 ${err} 次（${Math.round(rate * 100)}%）· 点击弱键特训`;
+    }
+    return;
+  }
   const spec = Object.entries(scheme.SM_NAME);
   const specLine = spec.length
     ? `翘舌声母换位见朱砂描边键（${scheme.name}：${spec.map(([k, v]) => `${v}→${k.toUpperCase()}`).join('、')}）。`
@@ -581,42 +606,55 @@ function renderStage0(body) {
   buildKeyboard($('kbmap'), { map: true });
 }
 
-function renderStage1(body) {
+// kind='drill'：间隔重复操练。双拼单元=韵母键（按钮自布局派生）；全拼单元=音节（课程数据清单）
+function renderStageDrill(body, st) {
   const due = store.srsDueKeys(scheme.id);
-  body.innerHTML = `<h3>韵母操练</h3>
-    <p>选一个韵母键反复练。带 <b class="due-dot">●</b> 的键是到期待复习键（间隔重复调度）。
-    ${due.length ? `<button class="btn primary" id="dueBtn">先练 ${due.length} 个到期键</button>` : '<span class="sub2">暂无到期待复习键</span>'}</p>
+  const unitName = st.unit === 'syllable' ? '音节' : '键';
+  body.innerHTML = `<h3>${st.name}</h3>
+    <p>${st.body}
+    ${due.length ? `<button class="btn primary" id="dueBtn">先练 ${due.length} 个到期${unitName}</button>` : '<span class="sub2">暂无到期待复习键</span>'}</p>
     <div class="finalkeys" id="finalkeys"></div>`;
-  if (due.length) $('dueBtn').onclick = () => startFinalDrill(due[0], due);
+  if (due.length) $('dueBtn').onclick = () => startDrill(st, due[0], due);
   const wrap = $('finalkeys');
-  const groups = {};
-  for (const [ym, k] of Object.entries(scheme.YM || {})) (groups[k] ||= []).push(ym);
-  // 键遍历派生自 layout（含 e/a 与附键，不再手写串）
-  const keys = [...scheme.layout.ROWS.join(''), ...scheme.layout.extraKeys];
-  for (const k of keys) {
-    const yms = groups[k] || [];
-    if (!yms.length && !scheme.layout.specialOf(k)) continue;
+  const mkBtn = (html, id) => {
     const b = document.createElement('button');
-    b.innerHTML = `${k === ';' ? ';' : k.toUpperCase()}<small>${yms.join('/') || '声母位'}</small>${due.includes(k) ? '<b class="due-dot">●</b>' : ''}`;
+    b.innerHTML = html;
     b.onclick = () => {
       wrap.querySelectorAll('button').forEach(x => x.classList.remove('on'));
       b.classList.add('on');
-      startFinalDrill(k);
+      startDrill(st, id);
     };
     wrap.appendChild(b);
+  };
+  if (st.unit === 'syllable') {
+    for (const syl of st.items || []) {
+      mkBtn(`${syl.toUpperCase()}${due.includes(syl) ? '<b class="due-dot">●</b>' : ''}`, syl);
+    }
+  } else {
+    const groups = {};
+    for (const [ym, k] of Object.entries(scheme.YM || {})) (groups[k] ||= []).push(ym);
+    // 键遍历派生自 layout（含 e/a 与附键，不再手写串）
+    const keys = [...scheme.layout.ROWS.join(''), ...scheme.layout.extraKeys];
+    for (const k of keys) {
+      const yms = groups[k] || [];
+      if (!yms.length && !scheme.layout.specialOf(k)) continue;
+      mkBtn(`${k === ';' ? ';' : k.toUpperCase()}<small>${yms.join('/') || '声母位'}</small>${due.includes(k) ? '<b class="due-dot">●</b>' : ''}`, k);
+    }
   }
   if (!wrap.children.length) {
     wrap.innerHTML = '<p class="sub">当前方案的操练内容建设中 —— 先去「练习」用内置池自由练习。</p>';
   }
 }
 
-function startFinalDrill(k, keySeq) {
+function startDrill(st, first, seq) {
   mode = 'finaldrill';
-  drillKey = k;
-  drillSeq = keySeq || [k];
-  const hit = BUILTIN.chars
-    .map(({ w, p }) => ({ word: w, py: p, weight: 1 }))
-    .filter(e => entryTouchesKey(e, drillSeq, 'ym'));
+  drillUnit = st.unit;
+  drillKey = first;
+  drillSeq = seq || [first];
+  const chars = BUILTIN.chars.map(({ w, p }) => ({ word: w, py: p, weight: 1 }));
+  const hit = drillUnit === 'syllable'
+    ? chars.filter(e => syllablesOf(e.py).some(s => drillSeq.includes(s)))
+    : chars.filter(e => entryTouchesKey(e, drillSeq, 'ym'));
   if (timer) { clearInterval(timer); timer = null; }
   wrongWordsThisSession = new Set();
   const raw = weightedSample(hit, Math.min(SESSION_LEN, hit.length));
@@ -636,19 +674,19 @@ function gotoPractice(m) {
   startSession(m);
 }
 
-function renderStagePractice(body, m) {
-  const name = m === 'chars' ? '单字练习' : '词组练习';
-  body.innerHTML = `<h3>${name}</h3>
-    <p>从内置${m === 'chars' ? '高频字' : '常用二字词'}池按频抽题。建议先用「全提示」，
-    顺手后切「仅按键」乃至「无提示」。</p>
+// kind='practice'：内置池取题（多池合并模式 = pools 以 '+' 连接）
+function renderStagePractice(body, st) {
+  const m = (st.pools || []).join('+');
+  body.innerHTML = `<h3>${st.name}</h3><p>${st.body}</p>
     <button class="btn primary" id="goStage">开始练习</button>`;
   $('goStage').onclick = () => gotoPractice(m);
 }
 
-function renderStage4(body) {
+// kind='mistakes'：错词本取题
+function renderStageMistakes(body, st) {
   const n = store.getMistakes(scheme.id).length;
-  body.innerHTML = `<h3>易错强化</h3>
-    <p>错词本现有 <b>${n}</b> 条。答错的词会自动进错词本（上限 200 条），这里专门重练它们。</p>
+  body.innerHTML = `<h3>${st.name}</h3>
+    <p>${st.body.replace('{n}', `<b>${n}</b>`)}</p>
     <button class="btn primary" id="goMk">${n ? '开始强化' : '错词本是空的'}</button>`;
   $('goMk').onclick = () => { if (n) gotoPractice('mistakes'); };
 }
@@ -968,6 +1006,7 @@ document.title = `鹤练 · ${scheme.name}练习`;
 $('inbox').setAttribute('aria-label', `输入${scheme.name}编码`);
 qsa('input[name="hint"]').forEach(r => { r.checked = r.value === hintLevel; });
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+buildConfusButtons();
 renderStreak();
 route();
 startSession('chars');

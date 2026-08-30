@@ -1,8 +1,8 @@
 // ADR-0007：壳资源 cache-first；同源非壳 network-first 回退缓存；字体 SWR
 // §3.5：data/packs/ 版本化文件 = cache-first 唯一持久层，不入 SHELL（防 addAll 原子失败）；
 //       message 'prefetch-pack' 预下载通道（#7 票接按钮）
-const CACHE = 'helian-v0.0.4';
-const SHELL = ['/', '/index.html', '/css/styles.css', '/js/app.js', '/js/data.js', '/js/flypy.js', '/js/parsers.js', '/js/schemes.js', '/js/packs.js', '/js/store.js', '/js/sound.js', '/js/share.js', '/manifest.webmanifest', '/icon.svg', '/og-image.svg', '/licenses.html'];
+const CACHE = 'helian-v0.0.5';
+const SHELL = ['/', '/index.html', '/css/styles.css', '/js/app.js', '/js/courses.js', '/js/data.js', '/js/flypy.js', '/js/parsers.js', '/js/schemes.js', '/js/packs.js', '/js/store.js', '/js/sound.js', '/js/share.js', '/manifest.webmanifest', '/icon.svg', '/og-image.svg', '/licenses.html'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));

@@ -205,6 +205,57 @@ check('许可页列三上游出处', await page.locator('main').innerText().then
 await page.goto(BASE + '/#/practice', { waitUntil: 'networkidle' });
 check('页脚含数据来源与许可链接', await page.locator('.foot a[href="licenses.html"]').count().then(n => n === 1));
 
+// 15. v3 #3：课程数据化 —— 五阶形状 / 全拼五阶 / 进度 per-scheme / 易混对数据驱动
+// 小鹤：易混对按钮由课程数据重建（六对，标签与次序保持）
+check('易混按钮由课程数据重建（六对）', await page.locator('#modes button[data-mode^="confus:"]').count().then(n => n === 6));
+check('易混按钮标签来自课程数据', await page.locator('#modes button[data-mode="confus:5"]').innerText().then(t => t === 'sh/s'));
+// 小鹤进度推进到阶 2（单字练习）
+await page.goto(BASE + '/#/course', { waitUntil: 'networkidle' });
+await page.locator('#stages li:not(.challenge)').nth(2).click();
+await page.waitForTimeout(150);
+check('小鹤进度按方案落盘', await page.evaluate(() =>
+  JSON.parse(localStorage.getItem('flypy.v1.course.flypy'))?.data?.stage === 2));
+check('单字练习正文数据驱动渲染', await page.locator('#stageBody h3').innerText().then(t => t === '单字练习'));
+check('开始练习按钮在', await page.locator('#goStage').count().then(n => n === 1));
+// 切全拼：课程从阶 0 起（进度独立），阶 0 = 弱键诊断热力图
+await page.goto(BASE + '/#/settings', { waitUntil: 'networkidle' });
+await page.selectOption('#setScheme', 'quanpin');
+await page.waitForTimeout(200);
+await page.goto(BASE + '/#/course', { waitUntil: 'networkidle' });
+check('全拼五阶+挑战卡渲染', await page.locator('#stages li').count().then(n => n === 6));
+check('全拼阶 0 = 弱键诊断', await page.locator('#stages li:not(.challenge)').first().innerText().then(t => t.includes('弱键诊断')));
+check('全拼进度从阶 0 起', await page.evaluate(() =>
+  (JSON.parse(localStorage.getItem('flypy.v1.course.quanpin'))?.data?.stage ?? 0) === 0));
+check('全拼阶 0 键位热力图渲染', await page.locator('#kbmap .key').count().then(n => n === 26));
+check('全拼阶 0 点键弱键特训', await page.locator('#stageBody').innerText().then(t => t.includes('弱键特训')));
+// 阶 1 高频音节操练：按钮数 = 课程数据音节清单长度
+const qpDrillItems = await page.evaluate(() => import('/js/courses.js').then(m => m.courseOf('quanpin').stages[1].items.length));
+await page.locator('#stages li:not(.challenge)').nth(1).click();
+await page.waitForTimeout(150);
+check('全拼音节操练按钮随课程数据', await page.locator('#finalkeys button').count().then(n => n === qpDrillItems));
+// 阶 3 长句节奏：合并池（words34+sentences）可开练
+await page.locator('#stages li:not(.challenge)').nth(3).click();
+await page.waitForTimeout(150);
+check('全拼阶 3 = 长句节奏', await page.locator('#stageBody h3').innerText().then(t => t === '长句节奏'));
+await page.click('#goStage');
+await page.waitForTimeout(250);
+check('全拼长句练习出题（长词条）', await page.locator('#word').innerText().then(t => [...t].length >= 3));
+check('全拼码文本为拼音串（开卷）', await page.locator('#hint b').innerText().then(t => /^[a-z]+$/.test(t)));
+// 全拼易混对 = 课程数据四对（音节尾对），可取题
+await page.goto(BASE + '/#/practice', { waitUntil: 'networkidle' });
+check('全拼易混对四对', await page.locator('#modes button[data-mode^="confus:"]').count().then(n => n === 4));
+check('全拼易混标签为音节尾对', await page.locator('#modes button[data-mode="confus:0"]').innerText().then(t => t === 'ian/iang'));
+await page.click('#modes button[data-mode="confus:0"]');
+await page.waitForTimeout(200);
+check('全拼易混模式可出题', await page.locator('#word').innerText().then(t => t.trim().length > 0));
+// 切回小鹤：课程进度保留（per-scheme），挑战卡副标按范式文案
+await page.goto(BASE + '/#/settings', { waitUntil: 'networkidle' });
+await page.selectOption('#setScheme', 'flypy');
+await page.waitForTimeout(200);
+await page.goto(BASE + '/#/course', { waitUntil: 'networkidle' });
+check('切回小鹤进度仍在阶 2', await page.locator('#stages li.on span').first().innerText().then(t => t.includes('单字练习')));
+check('七日挑战卡副标为范式文案', await page.locator('#stages li.challenge').innerText().then(t => t.includes('七天入门双拼')));
+
 await browser.close();
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
