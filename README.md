@@ -4,7 +4,7 @@
 
 > 你的词库，只在你的浏览器里。
 
-![version](https://img.shields.io/badge/版本-v0.0.3-101014?style=flat-square&labelColor=17171c&color=7f9dd9)
+![version](https://img.shields.io/badge/版本-v0.0.4-101014?style=flat-square&labelColor=17171c&color=7f9dd9)
 ![static](https://img.shields.io/badge/纯静态-零后端-101014?style=flat-square&labelColor=17171c&color=d96c4f)
 ![scheme](https://img.shields.io/badge/小鹤双拼-flypy-101014?style=flat-square&labelColor=17171c&color=7fa98c)
 ![privacy](https://img.shields.io/badge/数据-仅本地-101014?style=flat-square&labelColor=17171c&color=8b8b93)
@@ -45,9 +45,10 @@
 
 ```bash
 npx -y serve -l 4173 .   # 起本地服务
-node test/run.mjs        # 引擎单元测试（246 用例）
+node test/run.mjs        # 引擎单元测试
 npx tsc -p jsconfig.json # 类型检查
 node test/e2e.mjs        # e2e 走查（系统 Edge）
+node tools/build-packs.mjs # 重建 data/packs/（构建期联网拉上游字典，缓存 tools/.cache/，幂等）
 ```
 
 <a id="反馈"></a>

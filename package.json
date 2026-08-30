@@ -1,6 +1,9 @@
 {
   "name": "flypy-trainer",
-  "version": "0.0.3",
+  "version": "0.0.4",
+  "scripts": {
+    "build:packs": "node tools/build-packs.mjs"
+  },
   "devDependencies": {
     "playwright-core": "^1.62.1",
     "typescript": "^7.0.2"

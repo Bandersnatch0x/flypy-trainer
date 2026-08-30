@@ -285,5 +285,174 @@ storeMap.clear();
 eq('新用户迁移返回 fresh', migrate(), 'fresh');
 eq('新用户二迁返回 null', migrate(), null);
 
+// ---- v3 #2：data pack 管线（SPEC-0003 §3.5，验收条目 5/6）----
+const fs = await import('node:fs');
+const { BUILTIN: POOL } = await import('../js/data.js');
+const packs = await import('../js/packs.js');
+const { PACKS, loadPack, packState, bindPack, lookupChars, prefetchPacks, __resetForTest } = packs;
+
+// -- 工件：三份版本化紧凑 {字: 码}，内嵌出处与许可；速成/全拼/自然码无包 --
+const packDir = new URL('../data/packs/', import.meta.url);
+const readPack = (f) => JSON.parse(fs.readFileSync(new URL(f, packDir), 'utf8'));
+const wubiPack = readPack('wubi86.v1.json');
+const cangPack = readPack('cangjie5.v1.json');
+const zhuyPack = readPack('zhuyin-tones.v1.json');
+const entriesOf = (p) => Object.keys(p).filter(k => !k.startsWith('_'));
+eq('packs 目录恰有三份版本化 JSON', fs.readdirSync(packDir).filter(f => f.endsWith('.json')).sort(),
+  ['cangjie5.v1.json', 'wubi86.v1.json', 'zhuyin-tones.v1.json']);
+for (const [name, p] of [['wubi86', wubiPack], ['cangjie5', cangPack], ['zhuyin-tones', zhuyPack]]) {
+  eq(`${name} _meta 出处`, typeof p._meta.source === 'string' && p._meta.source.length > 0, true);
+  eq(`${name} _meta 许可`, p._meta.license, 'LGPL-3.0');
+  eq(`${name} _meta 上游指纹`, /^[0-9a-f]{64}$/.test(p._meta.upstreamSha256), true);
+}
+eq('wubi86 = GB2312 6,763 常用字', entriesOf(wubiPack).length, 6763);
+eq('wubi86 键皆单字', entriesOf(wubiPack).every(w => [...w].length === 1), true);
+eq('wubi86 码域 a–y ≤4 键', entriesOf(wubiPack).every(w => /^[a-y]{1,4}$/.test(wubiPack[w])), true);
+eq('wubi86 一级简码抽样', [wubiPack['工'], wubiPack['人'], wubiPack['地'], wubiPack['中']], ['a', 'w', 'f', 'k']);
+eq('cangjie5 条数与 _meta 一致', entriesOf(cangPack).length, cangPack._meta.entries);
+eq('cangjie5 键皆单 CJK 字', entriesOf(cangPack).every(w => [...w].length === 1 && /[\u3400-\u9FFF]/.test(w)), true);
+eq('cangjie5 码域 a–z ≤5 码', entriesOf(cangPack).every(w => /^[a-z]{1,5}$/.test(cangPack[w])), true);
+eq('cangjie5 日月金木水火土字母键', [cangPack['日'], cangPack['月'], cangPack['金'], cangPack['木'], cangPack['水'], cangPack['火'], cangPack['土']],
+  ['a', 'b', 'c', 'd', 'e', 'f', 'g']);
+eq('cangjie5 昌/中抽样', [cangPack['昌'], cangPack['中']], ['aa', 'l']);
+eq('速成/全拼/自然码无包', ['quick', 'sucueng', 'quanpin', 'ziranma'].every(id => !PACKS[id]), true);
+const poolItems = [...POOL.chars, ...POOL.words2, ...POOL.words34];
+const uniqItems = [...new Map(poolItems.map(e => [e.w, e])).values()];
+eq('zhuyin-tones 覆盖内置池全部字词', uniqItems.every(e => typeof zhuyPack[e.w] === 'string'), true);
+eq('zhuyin 值 = 逐字带调音节（1–5 调）', uniqItems.every(e => {
+  const syls = (zhuyPack[e.w] || '').split(' ');
+  return syls.length === [...e.w].length && syls.every(s => /^[a-züê]+[1-5]$/.test(s));
+}), true);
+eq('zhuyin 已知条目', [zhuyPack['北京'], zhuyPack['吗'], zhuyPack['我们']], ['bei3 jing1', 'ma5', 'wo3 men5']);
+eq('zhuyin 宽松选音清单在案', Array.isArray(zhuyPack._meta.fallbacks), true);
+
+// -- 装载器：内存缓存 / 并发去重 / 失败重试 / 未就绪可重试 / 不阻塞其它方案 --
+let fetchLog = [];
+let fetchImpl = null;
+globalThis.fetch = async (url) => { fetchLog.push(String(url)); return fetchImpl(String(url)); };
+const jsonRes = (obj, status = 200) => ({ ok: status >= 200 && status < 300, status, json: async () => obj, clone() { return this; } });
+
+__resetForTest(); fetchLog = [];
+fetchImpl = () => jsonRes({ _meta: { id: 'cangjie5', license: 'LGPL-3.0' }, 日: 'a', 月: 'b' });
+const tab1 = await loadPack('cangjie5');
+eq('loadPack 跳过 _meta 键', tab1, { 日: 'a', 月: 'b' });
+eq('loadPack 就绪态', packState('cangjie5'), 'ready');
+await loadPack('cangjie5');
+eq('内存缓存命中（不重复下载）', fetchLog.length, 1);
+
+__resetForTest();
+let hits = 0;
+fetchImpl = async () => { hits++; await new Promise(r => setTimeout(r, 10)); return jsonRes({ 日: 'a' }); };
+const [ta, tb] = await Promise.all([loadPack('cangjie5'), loadPack('cangjie5')]);
+eq('并发激活在途去重（2 并发 1 次下载）', hits, 1);
+eq('并发共享同一表', ta === tb, true);
+
+__resetForTest();
+let tries = 0;
+fetchImpl = () => (++tries < 3 ? Promise.reject(new Error('net')) : jsonRes({ 日: 'a' }));
+eq('失败重试后成功（第 3 次）', await loadPack('cangjie5'), { 日: 'a' });
+eq('重试共 3 次', tries, 3);
+
+__resetForTest();
+fetchImpl = () => Promise.reject(new Error('offline'));
+eq('持续失败抛错', await loadPack('cangjie5').then(() => false, () => true), true);
+eq('失败后状态 = error（入口未就绪）', packState('cangjie5'), 'error');
+fetchImpl = () => jsonRes({ 日: 'a' });
+eq('未就绪不投毒，再激活可就绪', await loadPack('cangjie5'), { 日: 'a' });
+eq('未知 pack 拒绝', await loadPack('nope').then(() => false, () => true), true);
+
+__resetForTest();
+fetchImpl = () => jsonRes({ _meta: {}, 日: 'a', 月: 'b' });
+const cjScheme = bindPack({ id: 'cangjie', name: '仓颉', paradigm: 'shape' }, 'cangjie5');
+eq('激活前无表', cjScheme.table, undefined);
+await cjScheme.activate();
+eq('activate() 接载后逐字查表出码', lookupChars(cjScheme.table, '日月'), 'ab');
+eq('lookupChars 缺字返回 null（取题过滤接缝）', lookupChars(cjScheme.table, '日月龘'), null);
+
+__resetForTest();
+fetchImpl = (url) => (url.includes('wubi86') ? Promise.reject(new Error('net')) : jsonRes({ 日: 'a' }));
+const sA = bindPack({ id: 'a' }, 'wubi86');
+const sB = bindPack({ id: 'b' }, 'cangjie5');
+const [ra, rb] = await Promise.allSettled([sA.activate(), sB.activate()]);
+eq('一包失败不阻塞其它方案', [ra.status, rb.status], ['rejected', 'fulfilled']);
+fetchImpl = () => jsonRes({ 工: 'a' });
+eq('失败方案重试激活后就绪', await sA.activate().then(t => t['工'], () => 'fail'), 'a');
+
+__resetForTest(); fetchLog = [];
+fetchImpl = () => jsonRes({});
+eq('prefetch 无 SW 回落直连成功', (await prefetchPacks(['cangjie5'])).ok, true);
+eq('prefetch 命中 pack 地址', fetchLog, ['/data/packs/cangjie5.v1.json']);
+eq('prefetch 拒绝未知包', (await prefetchPacks(['nope'])).ok, false);
+
+// -- sw.js 单测（桩环境：classic worker 脚本按模块导入，globals 先就位）--
+const swHandlers = {};
+globalThis.self = {
+  addEventListener: (type, fn) => { (swHandlers[type] ||= []).push(fn); },
+  skipWaiting: () => Promise.resolve(),
+  clients: { claim: () => Promise.resolve() },
+};
+const cacheStores = new Map();
+globalThis.caches = {
+  async open(name) {
+    if (!cacheStores.has(name)) cacheStores.set(name, new Map());
+    const m = cacheStores.get(name);
+    return {
+      async addAll(urls) { for (const u of urls) m.set(u, { __shell: u }); },
+      async put(req, res) { m.set(typeof req === 'string' ? req : req.url, res); },
+      async match(req) { return m.get(typeof req === 'string' ? req : req.url); },
+    };
+  },
+  async keys() { return [...cacheStores.keys()]; },
+  async match(req) {
+    const k = typeof req === 'string' ? req : req.url;
+    for (const m of cacheStores.values()) if (m.has(k)) return m.get(k);
+    return undefined;
+  },
+};
+globalThis.location = { origin: 'http://localhost:4173', hostname: 'localhost', href: 'http://localhost:4173/' };
+await import('../sw.js');
+const runHandler = async (type, ev) => { for (const fn of swHandlers[type] || []) await fn(ev); };
+
+let installP = null;
+await runHandler('install', { waitUntil: (p) => { installP = p; } });
+await installP;
+const cacheName = (await globalThis.caches.keys())[0];
+eq('SW CACHE 串随版本 bump', cacheName, 'helian-v0.0.4');
+const shellKeys = [...cacheStores.get(cacheName).keys()];
+eq('packs.js 与 licenses.html 入 SHELL', ['/js/packs.js', '/licenses.html'].every(u => shellKeys.includes(u)), true);
+eq('pack 不进 SHELL（防 addAll 原子失败）', shellKeys.some(u => u.startsWith('/data/packs/')), false);
+
+const packUrlFull = 'http://localhost:4173/data/packs/cangjie5.v1.json';
+let resp = null;
+fetchLog = [];
+fetchImpl = () => jsonRes({});
+cacheStores.get(cacheName).set(packUrlFull, { __hit: true });
+await runHandler('fetch', { request: { method: 'GET', url: packUrlFull }, respondWith: (p) => { resp = p; } });
+resp = await resp;
+eq('pack cache-first：命中直出缓存', resp.__hit, true);
+eq('pack cache-first：命中零联网', fetchLog, []);
+cacheStores.get(cacheName).delete(packUrlFull);
+const freshRes = jsonRes({ fresh: true });
+fetchImpl = () => freshRes;
+await runHandler('fetch', { request: { method: 'GET', url: packUrlFull }, respondWith: (p) => { resp = p; } });
+resp = await resp;
+eq('pack 未命中联网一次返回原响应', resp === freshRes, true);
+eq('pack 未命中即写入缓存', cacheStores.get(cacheName).has(packUrlFull), true);
+
+let reply = null;
+fetchLog = [];
+fetchImpl = () => jsonRes({});
+await runHandler('message', {
+  data: { type: 'prefetch-pack', urls: ['/data/packs/cangjie5.v1.json', '/evil', 'https://evil.com/x', '/js/app.js'] },
+  ports: [{ postMessage: (d) => { reply = d; } }],
+});
+await new Promise(r => setTimeout(r, 20));
+eq('message 预下载仅接受 /data/packs/ 同源地址', fetchLog, ['/data/packs/cangjie5.v1.json']);
+eq('message 预下载回报成功', reply && reply.ok, true);
+eq('message 预下载写入当前 CACHE', cacheStores.get(cacheName).has('/data/packs/cangjie5.v1.json'), true);
+reply = null;
+await runHandler('message', { data: { type: 'prefetch-pack', urls: ['/evil'] }, ports: [{ postMessage: (d) => { reply = d; } }] });
+eq('message 预下载拒绝非 pack 地址', reply && reply.ok, false);
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

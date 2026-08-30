@@ -150,6 +150,61 @@ await page.evaluate(() => {
   sel.dispatchEvent(new Event('change'));
 });
 
+// 13. v3 #2：data pack — 首访不下载 / 激活懒加载 / SW cache-first / 离线冒烟
+//     做法：独立干净上下文；断网用 context.setOffline(true) 真实切断网络，
+//     等价于「下载过 pack 后断网再激活」，无需拔线/关服务器。
+const ctx2 = await browser.newContext();
+const p2 = await ctx2.newPage();
+await p2.goto(BASE + '/#/practice', { waitUntil: 'networkidle' });
+await p2.evaluate(() => navigator.serviceWorker.ready);
+await p2.reload({ waitUntil: 'networkidle' }); // 确保 SW 接管
+const packReqs = [];
+p2.on('request', (r) => { if (r.url().includes('/data/packs/')) packReqs.push(r.url()); });
+await p2.reload({ waitUntil: 'networkidle' });
+check('首访不下载任何 pack', packReqs.length === 0);
+const noneCached = await p2.evaluate(async () => {
+  for (const k of await caches.keys()) {
+    const c = await caches.open(k);
+    for (const u of ['/data/packs/wubi86.v1.json', '/data/packs/cangjie5.v1.json', '/data/packs/zhuyin-tones.v1.json']) {
+      if (await c.match(u)) return false;
+    }
+  }
+  return true;
+});
+check('首访缓存中无 pack 预置', noneCached);
+const cjCount = await p2.evaluate(() => import('/js/packs.js').then(m => m.loadPack('cangjie5').then(t => Object.keys(t).length)));
+check('首次激活懒加载得全表', cjCount === 20910);
+const cachedAfter = await p2.evaluate(async () => {
+  for (const k of await caches.keys()) if (await (await caches.open(k)).match('/data/packs/cangjie5.v1.json')) return true;
+  return false;
+});
+check('pack 写入 SW 缓存（cache-first 持久层）', cachedAfter);
+check('pack 不写 localStorage', await p2.evaluate(() =>
+  ![...Object.entries(localStorage)].some(([k, v]) => k.includes('/data/packs') || v.length > 100000)), true);
+
+// 离线冒烟：真实断网后重载，已下载方案再激活仍可用；未下载包标未就绪不阻塞
+await ctx2.setOffline(true);
+await p2.reload({ waitUntil: 'load' });
+const offlineCount = await p2.evaluate(() => import('/js/packs.js')
+  .then(m => m.loadPack('cangjie5').then(t => Object.keys(t).length).catch(() => -1)));
+check('断网后再激活仍可用（SW cache-first）', offlineCount === 20910);
+const wubiState = await p2.evaluate(() => import('/js/packs.js')
+  .then(m => m.loadPack('wubi86').then(() => 'loaded', () => 'error')));
+check('断网未下载包标未就绪（不阻塞）', wubiState === 'error');
+await ctx2.setOffline(false);
+await p2.close();
+await ctx2.close();
+
+// 14. v3 #2：「数据来源与许可」静态页 + 页脚链接
+//     dev 用 serve 会把 /licenses.html 301 到 clean URL /licenses，两者同页；
+//     线上（Vercel）直出 /licenses.html。此处按 dev 服务器走 /licenses。
+await page.goto(BASE + '/licenses', { waitUntil: 'networkidle' });
+check('数据来源与许可页渲染', await page.locator('h1').innerText().then(t => t.includes('数据来源与许可')));
+check('许可页列三上游出处', await page.locator('main').innerText().then(t =>
+  t.includes('rime-wubi') && t.includes('rime-cangjie') && t.includes('rime-terra-pinyin')));
+await page.goto(BASE + '/#/practice', { waitUntil: 'networkidle' });
+check('页脚含数据来源与许可链接', await page.locator('.foot a[href="licenses.html"]').count().then(n => n === 1));
+
 await browser.close();
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
