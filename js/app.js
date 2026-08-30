@@ -42,7 +42,7 @@ addEventListener('hashchange', route);
 // ================= 键盘图（随方案 layout 重建）=================
 let keyEls = {};
 
-function buildKeyboard(container, { heat = false, map = false } = {}) {
+function buildKeyboard(container, { heat = false, map = false, onKey = null } = {}) {
   container.innerHTML = '';
   const els = {};
   const { ROWS, extraKeys, keyLabel, specialOf } = scheme.layout;
@@ -73,7 +73,7 @@ function buildKeyboard(container, { heat = false, map = false } = {}) {
     }
   } else {
     for (const [ch, el] of Object.entries(els)) {
-      el.onclick = () => { // 触屏/鼠标点按输入
+      el.onclick = onKey ? () => onKey(ch) : () => { // 触屏/鼠标点按输入（onKey=认知图点键看说明）
         const inbox = $('inbox');
         inbox.value += ch;
         inbox.dispatchEvent(new Event('input'));
@@ -85,12 +85,13 @@ function buildKeyboard(container, { heat = false, map = false } = {}) {
 keyEls = buildKeyboard($('kb'));
 
 // 数据包激活状态流（§5.5 三态 2）：正在准备资料包 → 就绪「开练」/ 失败「点按重试」
+// 就绪判定按「本方案表已挂载」：速成与仓颉共用 cangjie5 包，pack 就绪不等于每个方案都已接载
 async function ensurePack(s) {
-  if (!s.packId || packState(s.packId) === 'ready') return true;
+  if (!s.packId || s.table) return true;
   const p = DATA_PACKS[s.packId];
-  toast(`正在准备${p.name}（~${p.kb}KB）…`);
+  if (packState(s.packId) !== 'ready') toast(`正在准备${p.name}（~${p.kb}KB）…`);
   try {
-    await s.activate();
+    await s.activate(); // pack 已在内存时即时返回（内存缓存命中，零下载）
     toast(`${s.name}就绪，开练`);
     return true;
   } catch {
@@ -158,7 +159,8 @@ function entryTouchesKey(e, keys, role) {
   return (plan?.keys || []).some(k => keys.includes(k.key) && (!role || k.role === role));
 }
 
-function poolFor(m) {
+function poolFor(mIn) {
+  const m = mIn.split('@')[0]; // 课程练习阶 '@seq' 后缀只影响轮内排序，不影响取题池
   const imported = store.getPool();
   const mk = store.getMistakes(scheme.id);
   const bi = (arr) => arr.map(({ w, p }) => ({ word: w, py: p, weight: 1 }));
@@ -172,7 +174,8 @@ function poolFor(m) {
     if (!pair) return [];
     const base = [...bi(BUILTIN.chars), ...bi(BUILTIN.words2)];
     if (pair.ends) return base.filter(e => confusEndsMatch(e.py, pair));
-    return base.filter(e => entryTouchesKey(e, confusKeys(pair, scheme), pair.role === 'sm' ? 'sm' : 'ym'));
+    const role = ['sm', 'ym', 'root'].includes(pair.role) ? pair.role : undefined; // 形码形近字母对 role:'root'
+    return base.filter(e => entryTouchesKey(e, confusKeys(pair, scheme), role));
   }
   if (m.includes('+') && !m.includes(':')) { // 课程练习阶多池合并（如 words34+sentences）
     const seen = new Map();
@@ -237,6 +240,7 @@ function startSession(sourceMode) {
   const n = mode === 'sprint' ? Math.min(300, pool.length) : Math.min(SESSION_LEN, pool.length);
   const raw = weightedSample(pool, n);
   queue = raw.map(prepareEntry).filter(Boolean);
+  if (mode.endsWith('@len')) queue.sort((a, b) => a.code.length - b.code.length); // 先简字后满码（#5 阶 2）
   idx = 0; doneWords = 0; startTime = 0; correctKeys = 0; wrongKeys = 0;
   $('sTime').textContent = mode === 'sprint' ? `0:${SPRINT_SECS}` : '0:00';
   $('sDone').textContent = mode === 'sprint' ? '0' : `0/${queue.length}`;
@@ -604,9 +608,50 @@ function renderStage(body, st) {
   else renderStagePractice(body, st);
 }
 
-// kind='keys'：view='map' 键位说明图（双拼）；view='heat' 弱键热力图（全拼，点键特训）
+// kind='keys'：view='map' 键位说明图（双拼）；view='heat' 弱键热力图（全拼，点键特训）；
+//               view='roots' 形码字根认知（#5：点键看字母详情，四类分区 + X/Z 单列）
 function renderStageKeys(body, st) {
   store.markCourseSeen();
+  if (st.view === 'roots') {
+    body.innerHTML = `<h3>${st.name}</h3><p>${st.body}</p>
+      <div class="kbmap" id="kbmap"></div>
+      <div class="rootdetail" id="rootdetail"><p class="sub">点击任意键或下方字母，查看该字母的字根、辅助字形与例字。</p></div>
+      <div class="rootcats" id="rootcats"></div>`;
+    const pick = (ch) => {
+      const info = (st.letters || {})[ch];
+      const lab = scheme.layout.keyLabel(ch);
+      const box = $('rootdetail');
+      if (!info) { box.innerHTML = `<p class="sub">键 ${esc(ch.toUpperCase())}</p>`; return; }
+      const exHtml = (info.ex || []).map((w) => {
+        const c = scheme.codeOf({ word: w });
+        return `<span class="rootex">${esc(w)}<small>${c ? esc(c) : '…'}</small></span>`;
+      }).join(' ');
+      box.innerHTML = `<h4>${esc(lab.main)} · ${esc(info.name)}${info.cat ? `<small>（${esc(info.cat)}类）</small>` : ''}</h4>
+        ${info.note ? `<p>${esc(info.note)}</p>` : ''}
+        ${info.forms ? `<p class="sub">辅助字形：${esc(info.forms)}</p>` : ''}
+        ${exHtml ? `<p class="rootexwrap">例字（码随当前方案派生）：${exHtml}</p>` : ''}`;
+    };
+    buildKeyboard($('kbmap'), { map: true, onKey: pick });
+    const cats = $('rootcats');
+    for (const g of st.groups || []) {
+      const sec = document.createElement('div');
+      sec.className = 'rootcat';
+      sec.innerHTML = `<b>${esc(g.label)}</b>${g.desc ? ` <span class="sub">${esc(g.desc)}</span>` : ''}`;
+      const row = document.createElement('div');
+      row.className = 'rootrow';
+      for (const k of g.keys) {
+        const b = document.createElement('button');
+        b.className = 'btn ghost rootchip';
+        const lab = scheme.layout.keyLabel(k);
+        b.innerHTML = `${esc(lab.main)}<small>${esc(lab.sub)}</small>`;
+        b.onclick = () => pick(k);
+        row.appendChild(b);
+      }
+      sec.appendChild(row);
+      cats.appendChild(sec);
+    }
+    return;
+  }
   if (st.view === 'heat') {
     body.innerHTML = `<h3>${st.name}</h3><p>${st.body}</p><div class="kbmap" id="kbmap"></div>`;
     const els = buildKeyboard($('kbmap'), { heat: true });
@@ -639,7 +684,7 @@ function renderStageKeys(body, st) {
 // kind='drill'：间隔重复操练。双拼单元=韵母键（按钮自布局派生）；全拼单元=音节（课程数据清单）
 function renderStageDrill(body, st) {
   const due = store.srsDueKeys(scheme.id);
-  const unitName = st.unit === 'syllable' ? '音节' : '键';
+  const unitName = st.unit === 'syllable' ? '音节' : st.unit === 'letter' ? '字母' : '键';
   body.innerHTML = `<h3>${st.name}</h3>
     <p>${st.body}
     ${due.length ? `<button class="btn primary" id="dueBtn">先练 ${due.length} 个到期${unitName}</button>` : '<span class="sub2">暂无到期待复习键</span>'}</p>
@@ -660,8 +705,9 @@ function renderStageDrill(body, st) {
     for (const syl of st.items || []) {
       mkBtn(`${syl.toUpperCase()}${due.includes(syl) ? '<b class="due-dot">●</b>' : ''}`, syl);
     }
-  } else if (st.unit === 'symbol') {
-    // 注音符号键分组（声符→介符→韵符→声调键收尾，§4.1）；按钮标签随布局键帽派生
+  } else if (st.unit === 'symbol' || st.unit === 'letter') {
+    // 注音符号键分组（声符→介符→韵符→声调键收尾，§4.1）/ 仓颉字母四类分组（#5）；
+    // 按钮标签随布局键帽派生
     for (const g of st.groups || []) {
       const h = document.createElement('div');
       h.className = 'drillgroup';
@@ -694,9 +740,21 @@ function startDrill(st, first, seq) {
   drillKey = first;
   drillSeq = seq || [first];
   const chars = BUILTIN.chars.map(({ w, p }) => ({ word: w, py: p, weight: 1 }));
-  const hit = drillUnit === 'syllable'
-    ? chars.filter(e => syllablesOf(e.py).some(s => drillSeq.includes(s)))
-    : chars.filter(e => entryTouchesKey(e, drillSeq, drillUnit === 'ymKey' ? 'ym' : undefined));
+  let hit;
+  if (drillUnit === 'syllable') {
+    hit = chars.filter(e => syllablesOf(e.py).some(s => drillSeq.includes(s)));
+  } else if (drillUnit === 'letter') {
+    // 形码拆字操练（#5）：字根本字 = 一键题「字根 X 在哪键」；首码命中字 = 出字问首码，顺手打全拆解
+    const rootWords = new Set(drillSeq.map(k => st.roots && st.roots[k]).filter(Boolean));
+    const roots = [...rootWords].map(w => ({ word: w, py: '', weight: 3 }));
+    hit = [...roots, ...chars.filter(e => {
+      if (rootWords.has(e.word)) return false;
+      const c = scheme.codeOf(e);
+      return c && drillSeq.includes(c[0]);
+    })];
+  } else {
+    hit = chars.filter(e => entryTouchesKey(e, drillSeq, drillUnit === 'ymKey' ? 'ym' : undefined));
+  }
   if (timer) { clearInterval(timer); timer = null; }
   wrongWordsThisSession = new Set();
   const raw = weightedSample(hit, Math.min(SESSION_LEN, hit.length));
@@ -717,9 +775,9 @@ function gotoPractice(m) {
   startSession(m);
 }
 
-// kind='practice'：内置池取题（多池合并模式 = pools 以 '+' 连接）
+// kind='practice'：内置池取题（多池合并模式 = pools 以 '+' 连接；'@'+seq 传轮内排序选项）
 function renderStagePractice(body, st) {
-  const m = (st.pools || []).join('+');
+  const m = (st.pools || []).join('+') + (st.seq ? '@' + st.seq : '');
   body.innerHTML = `<h3>${st.name}</h3><p>${st.body}</p>
     <button class="btn primary" id="goStage">开始练习</button>`;
   $('goStage').onclick = () => gotoPractice(m);
@@ -763,7 +821,7 @@ function renderPacks() {
       const r = store.addLib(`集市·${p.name}`, entries);
       if (r.ok) {
         store.setSubs([...subs, p.file]);
-        toast(`已订阅「${p.name}」，${entries.length} 条入库`);
+        toast(`已订阅「${p.name}」，${entries.length} 条入库${scheme.paradigm === 'shape' ? ' · 形码仅取导入词中的单字' : ''}`);
         renderImport();
       } else toast('存储已满，先删除旧词库');
     };
@@ -837,6 +895,7 @@ async function handleFiles(files) {
     lines.push(`<div class="line"><b>${esc(f.name)}</b> · ${r.format} · 读入 ${r.entries.length} 条，去重后 ${entries.length} 条入库` +
       `${dropped ? ` · <span class="bad">${dropped} 条无法切分拼音且无可用码未入库</span>` : ''} · 练习池现有 ${res.kept} 条</div>`);
   }
+  lines.push('<div class="line">形码方案（仓颉/速成）仅取导入词中的单字出题，多字词不取题。</div>');
   lines.push('<div class="line">文件仅在你的浏览器内解析，未上传任何服务器。</div>');
   report.innerHTML = lines.join('');
   renderLiblist();
@@ -962,7 +1021,7 @@ function renderStats() {
     const d = document.createElement('div');
     d.className = 'sess';
     const sname = getScheme(s.scheme || 'flypy').name;
-    d.innerHTML = `<span>${new Date(s.ts).toLocaleString()}</span><span>${sname}</span><span>${s.mode}</span><b>${s.acc}%</b><span>${s.kpm} 键/分</span><span>${s.secs}s</span>`;
+    d.innerHTML = `<span>${new Date(s.ts).toLocaleString()}</span><span>${sname}</span><span>${s.mode.split('@')[0]}</span><b>${s.acc}%</b><span>${s.kpm} 键/分</span><span>${s.secs}s</span>`;
     list.appendChild(d);
   }
   if (!sessions.length) list.innerHTML = '<div class="empty">还没有会话记录</div>';

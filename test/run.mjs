@@ -23,20 +23,23 @@ function eq(name, got, want) {
 }
 
 const fly = SCHEMES.flypy, mspy = SCHEMES.mspy, sogou = SCHEMES.sogou, abc = SCHEMES.abc,
-  zrm = SCHEMES.ziranma, qp = SCHEMES.quanpin, zy = SCHEMES.zhuyin;
+  zrm = SCHEMES.ziranma, qp = SCHEMES.quanpin, zy = SCHEMES.zhuyin,
+  cj = SCHEMES.cangjie, qk = SCHEMES.quick;
 const code = (scheme, py) => scheme.codeOf({ word: '测', py });
 
 // ---- 1. 方案接口完整性（§3.1）----
 eq('默认方案仍为小鹤', DEFAULT_SCHEME, 'flypy');
-eq('注册表 7 方案', SCHEME_LIST.length, 7);
+eq('注册表 9 方案', SCHEME_LIST.length, 9);
 for (const s of Object.values(SCHEMES)) {
   eq(`${s.id} 接口七件齐`, ['id', 'name', 'paradigm', 'codeOf', 'planOf', 'layout', 'activate'].every(k => s[k] !== undefined), true);
-  eq(`${s.id} paradigm=phonetic`, s.paradigm, 'phonetic');
+  eq(`${s.id} paradigm 随范式`, s.paradigm, s.id === 'cangjie' || s.id === 'quick' ? 'shape' : 'phonetic');
   eq(`${s.id} layout.ROWS 存在`, Array.isArray(s.layout.ROWS), true);
   eq(`${s.id} keyLabel 函数`, typeof s.layout.keyLabel, 'function');
   eq(`${s.id} specialOf 函数`, typeof s.layout.specialOf, 'function');
   if (s.id === 'zhuyin') {
     eq('zhuyin activate 挂 zhuyin-tones 包（带调数据依赖，§2）', s.packId, 'zhuyin');
+  } else if (s.id === 'cangjie' || s.id === 'quick') {
+    eq(`${s.id} activate 挂 cangjie5 包（字表查询，§2）`, s.packId, 'cangjie5');
   } else {
     eq(`${s.id} activate 立即就绪`, await s.activate(), undefined);
   }
@@ -532,6 +535,114 @@ zy.table = null;
 eq('syllablesOf 连写串切分', syllablesOf('zhongguo'), ['zhong', 'guo']);
 eq('syllablesOf 空', syllablesOf(''), []);
 
+// ---- v3 #5：仓颉深教样板 + 速成（SPEC-0003 §2/§3.4/§4.1–4.3，验收条目 10/15/16，§8 缺口 2）----
+const cjm = await import('../js/cangjie.js');
+const { quickOf, CJ_KEYS } = cjm;
+const CJ_TABLE = Object.fromEntries(Object.entries(cangPack).filter(([k]) => !k.startsWith('_')));
+
+// -- 懒加载接缝：表未就绪不出题 --
+eq('cangjie 表未就绪 → 不出题', cj.codeOf({ word: '日' }), null);
+cj.table = CJ_TABLE; qk.table = CJ_TABLE;
+
+// -- 仓颉 codeOf：单字查表出码（≥12 用例，全部与 pack 实值核对）--
+const CJ_CASES = [
+  ['日', 'a'], ['月', 'b'], ['金', 'c'], ['木', 'd'], ['水', 'e'], ['火', 'f'], ['土', 'g'],
+  ['中', 'l'], ['昌', 'aa'], ['明', 'ab'], ['林', 'dd'], ['双', 'ee'], ['学', 'fbnd'],
+  ['楚', 'ddnyo'], ['影', 'afhhh'], ['望', 'ybhg'], ['解', 'nbshq'], ['龘', 'ypybp'],
+];
+for (const [w, c] of CJ_CASES) eq(`cangjie.codeOf(${w})`, cj.codeOf({ word: w }), c);
+eq('cangjie 多字词 → null（取题仅单字，§3.4）', cj.codeOf({ word: '中国', py: 'zhong guo' }), null);
+eq('cangjie 三字词 → null', cj.codeOf({ word: '王彬宇' }), null);
+eq('cangjie 非表字 → null（被取题过滤）', cj.codeOf({ word: '㵘' }), null);
+eq('cangjie 空词 → null', cj.codeOf({}), null);
+eq('cangjie 形码只按 word 查表（§3.3）', cj.codeOf({ word: '日', py: '', srcCode: 'zzz', srcScheme: 'flypy' }), 'a');
+
+// -- 速成 = 仓颉首尾二码运行时派生（≥12 用例；独立方案身份，零码表）--
+const QK_CASES = [
+  ['日', 'a'], ['明', 'ab'], ['林', 'dd'], ['双', 'ee'], ['时', 'ai'], ['学', 'fd'],
+  ['楚', 'do'], ['影', 'ah'], ['望', 'yg'], ['解', 'nq'], ['真', 'jc'], ['语', 'ir'],
+  ['鹤', 'om'], ['练', 'vc'], ['续', 'vk'], ['谢', 'ii'],
+];
+for (const [w, c] of QK_CASES) eq(`quick.codeOf(${w})`, qk.codeOf({ word: w }), c);
+eq('quick 与仓颉同码（1–2 码字）', qk.codeOf({ word: '明' }), cj.codeOf({ word: '明' }));
+eq('quick 异于仓颉（≥3 码字取首尾）', [cj.codeOf({ word: '学' }), qk.codeOf({ word: '学' })], ['fbnd', 'fd']);
+eq('quick 多字词 → null（取题仅单字）', qk.codeOf({ word: '中国' }), null);
+eq('quickOf 纯派生函数', [quickOf('a'), quickOf('ab'), quickOf('adi'), quickOf('afhhh'), quickOf(null)], ['a', 'ab', 'ai', 'ah', null]);
+eq('quick 独立方案身份', [qk.id, qk.name, qk.paradigm], ['quick', '速成', 'shape']);
+eq('quick 零码表：无独立包，共用 cangjie5', [PACKS.quick, qk.packId], [undefined, 'cangjie5']);
+
+// -- plan = 拆分步骤序列：label=字根名、note=字母（§4.2，验收条目 15）--
+const pChu = cj.planOf('ddnyo', { word: '楚' });
+eq('cangjie plan 扁平键序', pChu.keys.map(k => k.key), ['d', 'd', 'n', 'y', 'o']);
+eq('cangjie plan label = 字根名', pChu.keys.map(k => k.label), ['木', '木', '弓', '卜', '人']);
+eq('cangjie plan note = 字母（full 档「字根名+字母」引导料）', pChu.keys[0].note, '字母 D');
+eq('cangjie plan role = root', pChu.keys.every(k => k.role === 'root'), true);
+eq('quick plan = 首尾二码两步骤', qk.planOf('fd', { word: '学' }).keys.map(k => `${k.label}${k.key}`), ['火f', '木d']);
+
+// -- 布局：键帽主显仓颉字母、角标主字根；X 难 / Z 重 单列（§4.1 阶 0）--
+eq('cangjie 键帽主显字母/角标主字根', cj.layout.keyLabel('d'), { main: 'D', sub: '木', title: '仓颉字母 D · 字根木' });
+eq('cangjie X/Z 角标', [cj.layout.keyLabel('x').sub, cj.layout.keyLabel('z').sub], ['难', '重']);
+eq('cangjie X/Z 描边单列、余键不描边', [cj.layout.specialOf('x'), cj.layout.specialOf('z'), cj.layout.specialOf('d')], ['难', '重', '']);
+eq('cangjie 26 键位无附键', cj.layout.ROWS.join('').length + cj.layout.extraKeys.length, 26);
+eq('24 字母键 = A–Y 除 X（Z 非取码）', CJ_KEYS, 'abcdefghijklmnopqrstuvwy');
+
+// -- 课程五阶（验收条目 10：两方案全五阶可达）--
+const cjCourse = courseOf('cangjie'), qkCourse = courseOf('quick');
+eq('cangjie 阶 0 = 字根认知（roots 视图，§8 缺口 2）', cjCourse.stages[0].kind === 'keys' && cjCourse.stages[0].view === 'roots', true);
+const rootsGroups = cjCourse.stages[0].groups;
+eq('cangjie 阶 0 四类分区 + X/Z 单列', rootsGroups.map(g => g.keys.length), [7, 7, 4, 6, 2]);
+eq('cangjie 阶 0 四类和 = 24 字母（不含 x/z）', rootsGroups.slice(0, 4).flatMap(g => g.keys).sort().join(''), CJ_KEYS);
+eq('cangjie 阶 0 特殊组 = X 难 / Z 重', rootsGroups[4].keys, ['x', 'z']);
+const letters = cjCourse.stages[0].letters;
+eq('cangjie 字母表齐（24 字母 + X/Z）', Object.keys(letters).length, 26);
+eq('cangjie 例字皆在表内且首码归属该字母', Object.entries(letters).every(([k, v]) =>
+  v.special || ((v.ex || []).length > 0 && v.ex.every(w => CJ_TABLE[w] && CJ_TABLE[w][0] === k))), true);
+eq('cangjie 字根本字单码 = 其字母（「字根在哪键」一键题的事实基础）', Object.entries(letters).every(([k, v]) =>
+  v.special || CJ_TABLE[v.name] === k), true);
+eq('cangjie X 不作首码、Z 不入码（公开事实入教学）', letters.x.note.includes('不作首码') && letters.z.note.includes('无一含 z'), true);
+// 阶 1：拆字操练，SRS 单元 = 24 仓颉字母（验收条目 16）
+const cjDrill = cjCourse.stages[1], qkDrill = qkCourse.stages[1];
+eq('cangjie 阶 1 = 拆字操练（letter 单元）', cjDrill.kind === 'drill' && cjDrill.unit === 'letter', true);
+eq('cangjie SRS 单元 = 24 仓颉字母（X 不教、Z 非取码）', cjDrill.groups.flatMap(g => g.keys).sort().join(''), CJ_KEYS);
+eq('速成复用同一操练骨架（增首尾码速认话术）', qkDrill.unit === 'letter' && qkDrill.groups === cjDrill.groups && qkDrill.sub.includes('首尾码速认'), true);
+eq('cangjie 阶 1 供字根字（一键题）', [cjDrill.roots.a, cjDrill.roots.d, cjDrill.roots.y], ['日', '木', '卜']);
+// 阶 2：单字拆打，先简字后满码（轮内码长升序）
+eq('cangjie 阶 2 = chars 池 + 码长升序选项', [cjCourse.stages[2].pools, cjCourse.stages[2].seq], [['chars'], 'len']);
+eq('cangjie 阶 2 会话模式名带 @len', stageModes(cjCourse.stages[2]), ['chars@len']);
+eq('quick 阶 2 皆短码无排序（模式名干净）', stageModes(qkCourse.stages[2]), ['chars']);
+// 阶 3：词组——尾码锚点（'）包含结构教学；取题仍仅单字（§3.4）
+eq('cangjie 阶 3 词组含尾码锚点教学', cjCourse.stages[3].body.includes("'") && cjCourse.stages[3].body.includes('囝'), true);
+eq('cangjie 阶 3 取题仍仅单字（词取码规则缓议）', cjCourse.stages[3].pools, ['chars']);
+eq('quick 阶 3 = 各字首尾二码连打教学', qkCourse.stages[3].body.includes('首尾二码'), true);
+eq('两方案阶 4 = 错词本取题', [cjCourse.stages[4].kind, qkCourse.stages[4].kind], ['mistakes', 'mistakes']);
+
+// -- 易混对：形近字母对供给（物理键直给 + role:'root'），两侧皆可取题 --
+eq('cangjie 易混对皆形近字母对', cjCourse.confus.every(p => p.role === 'root' && p.keys.length === 2), true);
+const cjBase = POOL.chars.map(({ w, p }) => ({ word: w, py: p }));
+for (const pair of cjCourse.confus) {
+  const touch = (k) => cjBase.filter(e => {
+    const c = cj.codeOf(e);
+    return c && cj.planOf(c, e).keys.some(pk => pk.key === k && pk.role === pair.role);
+  }).length;
+  eq(`cangjie 易混对 ${pair.label} 两侧可取题`, pair.keys.every(k => touch(k) > 0), true);
+}
+eq('confusKeys 物理键直给不经声韵表', confusKeys(cjCourse.confus[0], cj), ['d', 'j']);
+
+// -- 七日挑战谓词（读课程数据机制复用）--
+eq('cangjie 挑战 D2 = 拆字操练', challengeMatch(cjCourse.challenge[1].match, 'finaldrill', cjCourse), true);
+eq('cangjie 挑战 D3 = 单字拆打（@len 模式）', challengeMatch(cjCourse.challenge[2].match, 'chars@len', cjCourse) && !challengeMatch(cjCourse.challenge[2].match, 'chars', cjCourse), true);
+eq('cangjie 挑战 D4 = 词组阶（chars 热身）', challengeMatch(cjCourse.challenge[3].match, 'chars', cjCourse), true);
+eq('quick 挑战 D2/D3 谓词', challengeMatch(qkCourse.challenge[1].match, 'finaldrill', qkCourse) && challengeMatch(qkCourse.challenge[2].match, 'chars', qkCourse), true);
+
+// -- 课程进度 per-scheme（条目 10 配套）--
+store.setCourse('flypy', { stage: 4 });
+eq('学完小鹤后切仓颉进度从阶 0 起', store.getCourse('cangjie'), { stage: 0 });
+eq('速成进度独立于仓颉', store.getCourse('quick'), { stage: 0 });
+
+// -- 内置字集规模与覆盖率：课程字集 = 内置高频字池，皆在 cangjie5 表内 --
+eq('内置字池 500 字全部可出仓颉题', POOL.chars.every(({ w }) => !!CJ_TABLE[w]), true);
+eq('内置词池用字全部在表（词组教学示例的事实基础）', [...new Set([...POOL.words2, ...POOL.words34].flatMap(({ w }) => [...w]))].every(ch => !!CJ_TABLE[ch]), true);
+
 // -- sw.js 单测（桩环境：classic worker 脚本按模块导入，globals 先就位）--
 const swHandlers = {};
 globalThis.self = {
@@ -565,9 +676,9 @@ let installP = null;
 await runHandler('install', { waitUntil: (p) => { installP = p; } });
 await installP;
 const cacheName = (await globalThis.caches.keys())[0];
-eq('SW CACHE 串随版本 bump', cacheName, 'helian-v0.0.3-dev4');
+eq('SW CACHE 串随版本 bump', cacheName, 'helian-v0.0.3-dev5');
 const shellKeys = [...cacheStores.get(cacheName).keys()];
-eq('packs.js / licenses.html / courses.js / zhuyin.js 入 SHELL', ['/js/packs.js', '/licenses.html', '/js/courses.js', '/js/zhuyin.js'].every(u => shellKeys.includes(u)), true);
+eq('packs.js / licenses.html / courses.js / zhuyin.js / cangjie.js 入 SHELL', ['/js/packs.js', '/licenses.html', '/js/courses.js', '/js/zhuyin.js', '/js/cangjie.js'].every(u => shellKeys.includes(u)), true);
 eq('pack 不进 SHELL（防 addAll 原子失败）', shellKeys.some(u => u.startsWith('/data/packs/')), false);
 
 const packUrlFull = 'http://localhost:4173/data/packs/cangjie5.v1.json';

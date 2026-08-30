@@ -425,6 +425,33 @@ h2 { font-size: 1.12rem; font-weight: 600; margin: 28px 0 12px; color: var(--bon
 .legend { display: flex; gap: 20px; margin-top: 16px; color: var(--ash); font-size: 0.84rem; flex-wrap: wrap; }
 .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
 
+/* ---- 形码字根认知（#5：字母详情 + 四类分区 + 例字）---- */
+.rootdetail {
+  margin-top: 16px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px;
+  background: linear-gradient(180deg, #1b1b22 0%, #17171d 100%);
+}
+.rootdetail h4 { color: var(--bone); font-size: 1.02rem; margin-bottom: 6px; }
+.rootdetail h4 small { color: var(--ash); font-weight: 400; margin-left: 6px; font-size: 0.8rem; }
+.rootdetail p { margin-top: 4px; font-size: 0.9rem; }
+.rootcats { margin-top: 18px; display: flex; flex-direction: column; gap: 14px; }
+.rootcat b { color: var(--bone); font-size: 0.92rem; }
+.rootcat .sub { margin-left: 8px; font-size: 0.82rem; }
+.rootrow { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.rootchip {
+  font-family: var(--mono); background: linear-gradient(180deg, #22222b 0%, #191920 100%);
+  color: var(--bone); border: 1px solid var(--line); border-radius: 10px; padding: 6px 12px;
+  cursor: pointer; min-height: 40px; font-size: 0.9rem; font-weight: 600;
+  transition: all 0.15s var(--ease);
+}
+.rootchip small { color: var(--ash); margin-left: 6px; font-family: var(--sans); font-weight: 400; font-size: 0.8rem; }
+.rootchip:hover { border-color: rgba(217, 108, 79, 0.4); background: var(--raised); transform: translateY(-1px); }
+.rootexwrap { margin-top: 6px; }
+.rootex {
+  display: inline-block; margin-right: 10px; color: var(--bone);
+  font-family: var(--serif); font-size: 1.05rem;
+}
+.rootex small { font-family: var(--mono); color: var(--cinnabar); margin-left: 4px; font-size: 0.78rem; }
+
 /* ---- 导入视图 ---- */
 .fmtgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 20px 0; }
 .fmt {

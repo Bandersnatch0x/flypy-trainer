@@ -293,6 +293,57 @@ await page.waitForTimeout(150);
 check('注音阶 1 符号操练按钮 42 个（21+3+13+5）', await page.locator('#finalkeys button').count().then(n => n === 42));
 check('注音阶 1 声调键收尾分组在', await page.locator('#finalkeys').innerText().then(t => t.includes('声调键')));
 check('注音阶 1 分组标题齐（声符/介符/韵符/声调键）', await page.locator('#finalkeys .drillgroup').count().then(n => n === 4));
+// 17. v3 #5：仓颉深教样板 + 速成 —— 字表查询 / 取题仅单字 / 字根认知五阶 / 首尾派生
+await page.goto(BASE + '/#/settings', { waitUntil: 'networkidle' });
+await page.selectOption('#setScheme', 'cangjie');
+await page.waitForTimeout(900); // 激活状态流：正在准备仓颉单字码表（~269KB）→ 就绪
+await page.goto(BASE + '/#/practice', { waitUntil: 'networkidle' });
+check('仓颉单字出码（1–5 字母，x 不作首码）', await page.locator('#hint b').innerText().then(t => /^[a-y]{1,5}$/.test(t)));
+check('仓颉引导为步骤话术', await page.locator('#guide').innerText().then(t => t.includes('第 1 步')));
+check('仓颉键帽主显字母/角标主字根（D=木）', await page.locator('#kb .key[data-key="d"] .ym').innerText().then(t => t === '木'));
+const cjWord = await page.locator('#word').innerText();
+const cjCode = await page.evaluate(async (w) => {
+  const m = await import('/js/schemes.js');
+  return m.getScheme('cangjie').codeOf({ word: w });
+}, cjWord);
+check('仓颉码与码文本一致', cjCode === await page.locator('#hint b').innerText());
+for (const ch of cjCode) await page.locator('#inbox').press(ch);
+await page.waitForTimeout(250);
+check('仓颉整码输入推进', await page.locator('#sDone').innerText().then(t => t.startsWith('1/')));
+check('仓颉多字词不取题（§3.4）', await page.evaluate(async () => {
+  const m = await import('/js/schemes.js');
+  return m.getScheme('cangjie').codeOf({ word: '中国', py: 'zhong guo' });
+}).then(c => c === null));
+const cjWrong = cjCode[0] === 'q' ? 'w' : 'q';
+await page.locator('#inbox').press(cjWrong);
+check('仓颉错键反馈显字根名', await page.locator('#fb').innerText().then(t => t.includes('应是')));
+// 课程：阶 0 字根认知（roots 视图）/ 阶 1 拆字操练（24 字母）
+await page.goto(BASE + '/#/course', { waitUntil: 'networkidle' });
+check('仓颉五阶+挑战卡渲染', await page.locator('#stages li').count().then(n => n === 6));
+check('仓颉阶 0 = 字根认知', await page.locator('#stages li:not(.challenge)').first().innerText().then(t => t.includes('字根认知')));
+check('仓颉阶 0 键位图 26 键', await page.locator('#kbmap .key').count().then(n => n === 26));
+check('仓颉阶 0 四类分区 + X/Z 单列（5 组）', await page.locator('#rootcats .rootcat').count().then(n => n === 5));
+await page.locator('#kbmap .key[data-key="d"]').click();
+await page.waitForTimeout(150);
+check('仓颉点键看字根详情（例字带码）', await page.locator('#rootdetail').innerText().then(t => t.includes('木') && t.includes('例字')));
+await page.locator('#stages li:not(.challenge)').nth(1).click();
+await page.waitForTimeout(150);
+check('仓颉阶 1 操练按钮 24 字母（X 不教、Z 非取码）', await page.locator('#finalkeys button').count().then(n => n === 24));
+check('仓颉阶 1 四类分组标题', await page.locator('#finalkeys .drillgroup').count().then(n => n === 4));
+// 速成：独立方案身份、首尾二码、共用字表即切即用
+await page.goto(BASE + '/#/settings', { waitUntil: 'networkidle' });
+await page.selectOption('#setScheme', 'quick');
+await page.waitForTimeout(500); // cangjie5 已在内存：速成接载即时就绪
+await page.goto(BASE + '/#/practice', { waitUntil: 'networkidle' });
+check('速成码 ≤2 键（首尾派生）', await page.locator('#hint b').innerText().then(t => /^[a-y]{1,2}$/.test(t)));
+const qkPair = await page.evaluate(async () => {
+  const m = await import('/js/schemes.js');
+  return [m.getScheme('cangjie').codeOf({ word: '学' }), m.getScheme('quick').codeOf({ word: '学' })];
+});
+check('速成 = 仓颉首尾二码（学 fbnd→fd）', qkPair[0] === 'fbnd' && qkPair[1] === 'fd');
+await page.goto(BASE + '/#/course', { waitUntil: 'networkidle' });
+check('速成五阶+挑战卡渲染', await page.locator('#stages li').count().then(n => n === 6));
+check('速成阶 1 含首尾码速认话术', await page.locator('#stages li:not(.challenge)').nth(1).innerText().then(t => t.includes('首尾码速认')));
 // 切回小鹤收尾
 await page.goto(BASE + '/#/settings', { waitUntil: 'networkidle' });
 await page.selectOption('#setScheme', 'flypy');

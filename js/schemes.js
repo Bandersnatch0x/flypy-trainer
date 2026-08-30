@@ -2,10 +2,11 @@
 // - codeOf(entry) 派生编码；返回 null = 不可出题，引擎过滤。
 // - planOf(code, entry) 返回扁平键序 {keys:[{key,label,note,role}], groups?}，按下标寻址，
 //   「每音节两键」只是双拼实现的内部细节，不再是引擎假设（SPEC-0003 §3.1–3.2）。
-// - makeScheme 是音码（双拼族）实现工厂；全拼另走恒等派生。形码（字表查询）后续票接入。
+// - makeScheme 是音码（双拼族）实现工厂；全拼另走恒等派生；形码走 makeShapeScheme（字表查询，issue #5）。
 // 键位表译自 iDvel/rime-ice 与 rime-double-pinyin 官方 schema algebra 段（ADR-0005），自写表。
 import { normalizeSyllable, splitSyllable, splitPinyin, YM as FLYPY_YM, SM_KEYS as FLYPY_SM, SM_NAME as FLYPY_SMN } from './flypy.js';
 import { ZY_ROWS, ZY_EXTRA_KEYS, ZM_OF_KEY, TONE_MARKS, toZhuyin, keysOfToned, planOfToned } from './zhuyin.js';
+import { CJ_LETTERS, quickOf } from './cangjie.js';
 import { bindPack } from './packs.js';
 
 const ROWS3 = ['qwertyuiop', 'asdfghjkl', 'zxcvbnm'];
@@ -233,6 +234,42 @@ function makeZhuyin() {
   return bindPack(scheme, 'zhuyin');
 }
 
+// ---- 形码（字表查询）：仓颉深教样板 + 速成官方变体（SPEC-0003 §2/§4，issue #5）----
+// 码逐字查 cangjie5.base 派生：仓颉=全码；速成=首尾二码运行时派生，零码表（官方规则）。
+// 取题仅单字（§3.4）：多字词/非仓颉表字返回 null，引擎过滤。
+// plan=拆分步骤序列：label=字根名、note=字母——仓颉码即拆解序列，零额外数据（§4.2、T3-D3）。
+function makeShapeScheme({ id, name, derive }) {
+  const scheme = { id, name, paradigm: 'shape' };
+  const codeOf = (entry) => {
+    const word = entry && entry.word;
+    if (!word || [...word].length !== 1) return null; // 取题仅单字（§3.4）
+    const full = scheme.table ? scheme.table[word] : null;
+    return full ? derive(full) : null; // 表未就绪/非仓颉字 → 不可出题
+  };
+  const labelOf = (ch) => {
+    const L = CJ_LETTERS[ch];
+    return L ? L.name : ch.toUpperCase();
+  };
+  const planOf = (code) => ({
+    keys: [...String(code || '')].map((ch) => ({ key: ch, label: labelOf(ch), note: `字母 ${ch.toUpperCase()}`, role: 'root' })),
+    groups: [],
+  });
+  const keyLabel = (ch) => {
+    const L = CJ_LETTERS[ch];
+    if (!L) return { main: ch.toUpperCase(), sub: '', title: `键 ${ch.toUpperCase()}` };
+    return { main: ch.toUpperCase(), sub: L.name, title: `仓颉字母 ${ch.toUpperCase()} · 字根${L.name}` };
+  };
+  scheme.codeOf = codeOf;
+  scheme.planOf = planOf;
+  scheme.layout = {
+    ROWS: ROWS3, extraKeys: [], keyLabel,
+    specialOf: (ch) => (CJ_LETTERS[ch] && CJ_LETTERS[ch].special ? CJ_LETTERS[ch].name : ''), // X 难 / Z 重 描边单列
+  };
+  scheme.activate = () => Promise.resolve(); // bindPack 覆写为 pack 装载
+  scheme.YM = {}; scheme.SM_KEYS = {}; scheme.SM_NAME = {};
+  return bindPack(scheme, 'cangjie5'); // 速成与仓颉共用同一份字表（零码表，§2）
+}
+
 export const SCHEMES = {
   flypy: makeScheme({
     id: 'flypy', name: '小鹤双拼', zero: 'first', zeroDouble: true, jqxyV: true,
@@ -276,6 +313,8 @@ export const SCHEMES = {
   }),
   quanpin: makeQuanpin(),
   zhuyin: makeZhuyin(),
+  cangjie: makeShapeScheme({ id: 'cangjie', name: '仓颉', derive: (full) => full }), // 深教样板（T3-D1/D2）
+  quick: makeShapeScheme({ id: 'quick', name: '速成', derive: quickOf }), // 官方变体：首尾二码，复用全五阶（T3-D4）
 };
 
 export const DEFAULT_SCHEME = 'flypy'; // 小鹤仍是旗舰与默认（map-Q3a）

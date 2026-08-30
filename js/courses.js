@@ -7,12 +7,16 @@
 //   challengeSub: string,      // 七日挑战卡副标文案
 //   stages: [                  // 恰 5 阶，形状固定；公共字段 name（阶名）/ sub（副标题）/ body（正文，'{n}'=错词数占位）
 //     // kind='keys'     键位图认知/诊断：{view:'map'} 键位说明图 | {view:'heat'} 弱键热力图（点键即弱键特训）
-//     // kind='drill'    间隔重复操练：{unit:'ymKey'|'syllable'|'symbol', items?:string[], groups?:[{label, keys}]}
+//     //                 | {view:'roots'} 形码字根认知（#5）：{groups:[{label,desc,keys}], letters:{键:{name,forms?,ex?,note?,special?}}}
+//     //                 键帽主显字母、角标主字根，点键看字根例字（例字码按当前方案实时派生）；四类分区+特殊键单列
+//     // kind='drill'    间隔重复操练：{unit:'ymKey'|'syllable'|'symbol'|'letter', items?:string[], groups?:[{label, keys}], roots?:{键:字根字}}
 //     //                 ymKey=韵母键（按钮自方案 layout+YM 派生，省略 items）；
 //     //                 syllable=音节（items=高频音节清单，拼音串；SRS 单元即音节，维度不变）；
-//     //                 symbol=符号键（注音：groups 分组清单 声符→介符→韵符→声调键，SRS 单元=键，含声调键〔规格推断〕5）
-//     // kind='practice' 池取题练习：{pools:['chars'|'words2'|'words34'|'sentences']}，多池合并；
-//     //                 会话模式名 = pools 以 '+' 连接
+//     //                 symbol=符号键（注音：groups 分组清单 声符→介符→韵符→声调键，SRS 单元=键，含声调键〔规格推断〕5）；
+//     //                 letter=仓颉字母键（形码 #5：groups=四类分组；SRS 单元=24 字母，X 不教 Z 非取码；
+//     //                 roots 供「字根 X 在哪键」一键题=字根本字；出字题打首码起的全码）
+//     // kind='practice' 池取题练习：{pools:['chars'|'words2'|'words34'|'sentences'], seq?:'len'}，多池合并；
+//     //                 会话模式名 = pools 以 '+' 连接（+'@'+seq）；seq:'len'=轮内按码长升序（先简字后满码，#5）
 //     // kind='mistakes' 错词本取题（无额外字段；会话模式名 'mistakes'）
 //     // drill 阶会话模式名恒为 'finaldrill'
 //   ],
@@ -20,7 +24,7 @@
 //     // 三形：
 //     // {label, role:'sm'|'ym', a, b}  键位对——a/b 经方案声/韵表映射为物理键，按 plan 触达过滤（双拼）
 //     // {label, ends:[u,v]}            音节尾对——词条任一音节以 u 或 v 结尾即入选（全拼前后鼻音类）
-//     // {label, role, keys:[...]}      物理键直给——注音翘舌/鼻音等对（形码形近字母对 #5 供）
+//     // {label, role, keys:[...]}      物理键直给——注音翘舌/鼻音等对；形码形近字母对用 role:'root'（#5）
 //   ],
 //   challenge: [               // 七日挑战谓词（读范式课程数据，〔规格推断〕6）
 //     // {tag, label, match}；match 四形：
@@ -28,10 +32,12 @@
 //   ],
 // }
 // 双拼五变体同范式复用同一骨架（§1 红线「同范式变体复用骨架只换映射」）；
-// 全拼为「提速为核」骨架变体（T4-Q1）。字集/词集直取内置池（js/data.js），不新增数据。
+// 全拼为「提速为核」骨架变体（T4-Q1）；仓颉为形码深教样板、速成复用其全五阶（T3，issue #5）。
+// 字集/词集直取内置池（js/data.js），不新增数据。
 
 import { splitPinyin } from './flypy.js';
 import { ZY_GROUPS } from './zhuyin.js';
+import { CJ_CATS, CJ_LETTERS } from './cangjie.js';
 
 // ---- 双拼族（五变体共用骨架）----
 const SP_CONFUS = [
@@ -137,6 +143,72 @@ const ZHUYIN_COURSE = {
   ],
 };
 
+// ---- 形码：仓颉深教样板 + 速成官方变体（§4.1 仓颉/速成列，issue #5）----
+// 字集 = 内置高频字池（500 字，皆在 cangjie5 pack 内）+ 导入单字；取题仅单字（§3.4）。
+const CJ_ROOT_GROUPS = [
+  ...CJ_CATS.map(c => ({ label: `${c.label}类 · ${[...c.keys].map(k => CJ_LETTERS[k].name).join(' ')}`, desc: c.desc, keys: [...c.keys] })),
+  { label: '特殊 · 难 X / 重 Z', desc: 'X 难（复合难拆形，不作首码）与 Z 重（重形键，不参与取码）单列，不进 24 字母间隔重复。', keys: ['x', 'z'] },
+];
+const CJ_DRILL_GROUPS = CJ_CATS.map(c => ({ label: `${c.label}类 · ${[...c.keys].map(k => CJ_LETTERS[k].name).join(' ')}`, keys: [...c.keys] }));
+const CJ_ROOT_CHARS = Object.fromEntries(Object.entries(CJ_LETTERS).filter(([, v]) => !v.special).map(([k, v]) => [k, v.name]));
+const CJ_CONFUS = [
+  { label: '木/十', role: 'root', keys: ['d', 'j'] },
+  { label: '日/月', role: 'root', keys: ['a', 'b'] },
+  { label: '田/口', role: 'root', keys: ['w', 'r'] },
+  { label: '大/人', role: 'root', keys: ['k', 'o'] },
+];
+const CJ_CHALLENGE = (s2, s3) => [
+  { tag: 'D1', label: '任意一轮热身', match: { any: true } },
+  { tag: 'D2', label: '拆字操练一轮', match: { stage: 1 } },
+  { tag: 'D3', label: `${s2}一轮`, match: { stage: 2 } },
+  { tag: 'D4', label: `${s3}一轮`, match: { stage: 3 } },
+  { tag: 'D5', label: '形近对抗一轮', match: { prefix: 'confus' } },
+  { tag: 'D6', label: '限时冲刺一轮', match: { modes: ['sprint'] } },
+  { tag: 'D7', label: '混合综合一轮', match: { modes: ['mixed'] } },
+];
+const CJ_MISTAKES_STAGE = { kind: 'mistakes', name: '易错强化', sub: '从你的错词本取题', body: '错词本现有 {n} 条。答错的词会自动进错词本（上限 200 条），这里专门重练它们。' };
+
+const cangjieStages = [
+  { kind: 'keys', view: 'roots', groups: CJ_ROOT_GROUPS, letters: CJ_LETTERS,
+    name: '字根认知', sub: '键帽仓颉字母 · 角标主字根 · 四类讲透 24 字母',
+    body: '仓颉的码就是字形的拆解序列：每个键对应一个仓颉字母（字根）。键帽大字是字母，角标是主字根；24 个字母按「哲理、笔画、人体、字形」四类讲，X（难）Z（重）单列。点击任意键查看该字母的辅助字形与例字（例字码随当前方案派生）。' },
+  { kind: 'drill', unit: 'letter', groups: CJ_DRILL_GROUPS, roots: CJ_ROOT_CHARS,
+    name: '拆字操练', sub: '字根在哪键 · 出字问首码（间隔重复）',
+    body: '逐字母间隔重复：一键题是「字根 X 在哪键」——字根本字只有一码，正是那个字母；多键题出字问首码，顺手把整条拆解打完。带 <b class="due-dot">●</b> 的字母是到期待复习字母（间隔重复调度）。' },
+  { kind: 'practice', pools: ['chars'], seq: 'len',
+    name: '单字拆打', sub: 'plan=拆分步骤序列 · 先简字后满码',
+    body: '从内置高频字池逐字出题，plan 即拆分步骤序列。本阶先简字（1–3 码）后满码——同一轮内按码长自动升序。建议先用「全提示」：引导逐步读出「字根名＋字母」。' },
+  { kind: 'practice', pools: ['chars'],
+    name: '词组', sub: '构词=各字码连打 · 尾码锚点与包围结构',
+    body: '仓颉打词组＝按书写顺序把各字的码连打；官方构词另有取码规则——词内单字取「首码、尾码、首尾二码或首、次、尾三码」，包围结构以尾码锚点（\'）分界首与身（如 囝=w\'nd：先外框 囗 后内部 子），便于定位词的尾码。本站 v3 取题仅单字，构词细则缓议——本阶仍练单字：把每个字的拆解打熟，词组连打水到渠成。' },
+  CJ_MISTAKES_STAGE,
+];
+
+const CANGJIE_COURSE = {
+  scheme: 'cangjie', challengeSub: '每天一个小目标，七天入门仓颉拆字',
+  stages: cangjieStages, confus: CJ_CONFUS, challenge: CJ_CHALLENGE('单字拆打', '词组热身'),
+};
+
+const quickStages = [
+  { ...cangjieStages[0],
+    sub: '同仓颉：先认字母，再谈首尾' },
+  { ...cangjieStages[1],
+    name: '拆字操练', sub: '首尾码速认 · 出字只打首尾二码（间隔重复）',
+    body: '操练单元同仓颉 24 字母；速成单字码至多两键——出字打「首码＋尾码」，本身就是首尾码速认。一键题仍是「字根 X 在哪键」。带 <b class="due-dot">●</b> 的字母是到期待复习字母（间隔重复调度）。' },
+  { kind: 'practice', pools: ['chars'],
+    name: '单字拆打', sub: '2 码短码 · 节奏更快',
+    body: '速成单字皆 1–2 码（仓颉首尾派生），节奏更快。建议先用「全提示」，顺手后切「仅按键」乃至「无提示」。' },
+  { ...cangjieStages[3],
+    sub: '词组=各字首尾二码连打',
+    body: '速成词组＝各字取仓颉首尾二码连打（官方 quick5 规则：一条 derive 由仓颉 base 运行时派生，零码表）。本站 v3 取题仅单字——本阶仍练单字：首尾二码打熟，词组连打水到渠成。' },
+  CJ_MISTAKES_STAGE,
+];
+
+const QUICK_COURSE = {
+  scheme: 'quick', challengeSub: '每天一个小目标，七天入门速成',
+  stages: quickStages, confus: CJ_CONFUS, challenge: CJ_CHALLENGE('短码单字', '词组热身'),
+};
+
 export const COURSES = {
   flypy: shuangpinCourse('flypy'),
   mspy: shuangpinCourse('mspy'),
@@ -145,6 +217,8 @@ export const COURSES = {
   ziranma: shuangpinCourse('ziranma'),
   quanpin: QUANPIN_COURSE,
   zhuyin: ZHUYIN_COURSE,
+  cangjie: CANGJIE_COURSE,
+  quick: QUICK_COURSE,
 };
 export function courseOf(schemeId) { return COURSES[schemeId] || COURSES.flypy; }
 
@@ -169,11 +243,11 @@ export function confusEndsMatch(py, pair) {
   return syllablesOf(py).some(s => pair.ends.some(t => s.endsWith(t)));
 }
 
-// 课程阶 → 会话模式名（drill='finaldrill'；practice=pools 以 '+' 连接；mistakes='mistakes'）
+// 课程阶 → 会话模式名（drill='finaldrill'；practice=pools 以 '+' 连接，+'@'+seq；mistakes='mistakes'）
 export function stageModes(stage) {
   if (!stage) return [];
   if (stage.kind === 'drill') return ['finaldrill'];
-  if (stage.kind === 'practice') return [(stage.pools || []).join('+')];
+  if (stage.kind === 'practice') return [(stage.pools || []).join('+') + (stage.seq ? '@' + stage.seq : '')];
   if (stage.kind === 'mistakes') return ['mistakes'];
   return [];
 }
