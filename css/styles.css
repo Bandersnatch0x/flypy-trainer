@@ -443,7 +443,7 @@ h2 { font-size: 1.12rem; font-weight: 600; margin: 28px 0 12px; color: var(--bon
 .rootchip {
   font-family: var(--mono); background: linear-gradient(180deg, #22222b 0%, #191920 100%);
   color: var(--bone); border: 1px solid var(--line); border-radius: 10px; padding: 6px 12px;
-  cursor: pointer; min-height: 40px; font-size: 0.9rem; font-weight: 600;
+  cursor: pointer; min-height: 44px; font-size: 0.9rem; font-weight: 600;
   transition: all 0.15s var(--ease);
 }
 .rootchip small { color: var(--ash); margin-left: 6px; font-family: var(--sans); font-weight: 400; font-size: 0.8rem; }
