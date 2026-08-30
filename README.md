@@ -44,7 +44,7 @@
 
 ```bash
 npx -y serve -l 4173 .   # 起本地服务
-node test/run.mjs        # 引擎单元测试（86 用例）
+node test/run.mjs        # 引擎单元测试（116 用例）
 npx tsc -p jsconfig.json # 类型检查
 node test/e2e.mjs        # e2e 走查（系统 Edge）
 ```
