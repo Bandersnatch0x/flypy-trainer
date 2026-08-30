@@ -17,11 +17,16 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&family=JetBrains+Mono:wght@400;600&family=Noto+Serif+SC:wght@600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/schemes.css">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23101014'/%3E%3Ccircle cx='16' cy='16' r='6' fill='%23D96C4F'/%3E%3C/svg%3E">
 </head>
 <body>
 <header class="topbar">
-  <div class="brand">鹤练<span class="dot">·</span><small>小鹤双拼</small></div>
+  <div class="brand">鹤练<span class="dot">·</span>
+    <button id="schemeChip" class="chip" type="button" aria-haspopup="true" aria-expanded="false" aria-label="切换输入方案"><span class="chipname">小鹤双拼</span><span class="chiparrow">▾</span></button>
+  </div>
+  <div id="schemePop" class="schemepop hidden" role="menu" aria-label="切换输入方案"></div>
+  <div id="chipBubble" class="chipbubble">在这里切换输入方案</div>
   <nav class="nav">
     <a href="#/practice" data-view="practice" class="on">练习</a>
     <a href="#/course" data-view="course">课程</a>
@@ -68,7 +73,7 @@
     <span>进度 <b id="sDone">0/0</b></span>
   </div>
   <div class="prog"><div id="prog"></div></div>
-  <div id="kb" class="kb" aria-hidden="true"></div>
+  <div id="kb" class="kb cascade" aria-hidden="true"></div>
 
   <div id="result" class="result hidden">
     <h2>本轮完成</h2>
@@ -76,7 +81,7 @@
     <button id="again" class="btn primary">再来一轮</button>
   </div>
 
-  <details class="help">
+  <details class="help" id="helpBlock">
     <summary>什么是声母、韵母？什么是双拼？</summary>
     <div class="helpbody">
       <p>每个汉字的拼音分两部分：<b>声母</b>是开头的辅音，<b>韵母</b>是剩下的部分。
@@ -160,14 +165,10 @@
   </div>
   <div class="setgroup">
     <h2>方案与音效</h2>
-    <label class="chk">输入法方案
-      <select id="setScheme" class="sel">
-        <option value="flypy">小鹤双拼</option>
-        <option value="mspy">微软双拼</option>
-        <option value="sogou">搜狗双拼</option>
-        <option value="abc">智能ABC</option>
-      </select>
-    </label>
+    <div class="chk schemeline">当前方案
+      <b id="setSchemeNow">小鹤双拼 · 音码</b>
+      <a id="setSchemeGo" class="linklike" href="#/schemes">更换</a>
+    </div>
     <label class="chk"><input type="checkbox" id="setSound"> 按键音效（默认关）</label>
   </div>
   <div class="setgroup">
@@ -182,6 +183,10 @@
     <p class="sub">所有数据仅保存在本机浏览器（localStorage）。</p>
     <button id="resetAll" class="btn ghost">重置全部本地数据</button>
   </div>
+</section>
+
+<section id="view-schemes" class="view hidden">
+  <div id="schemelib" class="schemelib"></div>
 </section>
 </main>
 

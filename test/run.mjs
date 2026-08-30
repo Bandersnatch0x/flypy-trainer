@@ -735,6 +735,54 @@ const scanned = ['index.html', ...jsFiles].map(f => fs.readFileSync(new URL('../
 eq('命名边界：站内零「五笔字型/王码」', /五笔字型|王码/.test(scanned), false);
 eq('命名边界：方案名即通称', [wb.id, wb.name, SCHEME_LIST.find(s => s.id === 'wubi86').name], ['wubi86', '五笔 86', '五笔 86']);
 
+// ---- v3 #7：方案库 UI 数据模型（SPEC-0003 §5.1/§5.2/§5.4/§5.5，验收条目 17/20 的纯逻辑面）----
+const sui = await import('../js/schemes-ui.js');
+
+// -- 三层分组：旗舰小鹤顶层 + 音码组（6）+ 形码组（3），合计 10 卡无重复（条目 17）--
+eq('旗舰 = 小鹤', sui.FLAGSHIP_ID, 'flypy');
+const groupIds = sui.GROUPS.flatMap(g => g.ids);
+eq('方案库恰 10 卡（旗舰 1 + 组内 9，无重复）', new Set([sui.FLAGSHIP_ID, ...groupIds]).size === 10 && groupIds.length === 9, true);
+eq('10 卡覆盖注册表全部方案', Object.keys(SCHEMES).every(id => id === sui.FLAGSHIP_ID || groupIds.includes(id)), true);
+eq('音码组次序：自然码/微软/搜狗/智能ABC → 全拼 → 注音', sui.GROUPS[0].ids, ['ziranma', 'mspy', 'sogou', 'abc', 'quanpin', 'zhuyin']);
+eq('形码组次序：仓颉 → 速成 → 五笔 86（速成紧邻仓颉）', sui.GROUPS[1].ids, ['cangjie', 'quick', 'wubi86']);
+eq('分组科普行（§5.1 文案）', [sui.GROUPS[0].blurb, sui.GROUPS[1].blurb],
+  ['音码 · 码即读音（全拼、五种双拼、注音）', '形码 · 码即字形（仓颉、速成、五笔）']);
+eq('速成卡与仓颉卡相邻（互注前提，T5-D5）', sui.GROUPS[1].ids.indexOf('quick') - sui.GROUPS[1].ids.indexOf('cangjie'), 1);
+
+// -- 卡片元数据：十卡皆有一句话特点；关键文案按规格（条目 17）--
+eq('十卡皆备一句话特点', Object.keys(SCHEMES).every(id => typeof sui.CARD_FEATURES[id] === 'string' && sui.CARD_FEATURES[id].length > 0), true);
+eq('自然码特点 = 与微软差 3 处（T4）', sui.CARD_FEATURES.ziranma, '与微软双拼仅差 3 处');
+eq('注音特点 = 41 键大千布局 · 声调成字（T4）', sui.CARD_FEATURES.zhuyin, '41 键大千布局 · 声调成字');
+eq('速成卡互注文案（§5.1）', sui.CARD_FEATURES.quick, '速成 = 仓颉首尾二码，节奏更快');
+
+// -- 状态行：课程形态标签 + 五笔灰调降级标签（条目 17 / T5-D6）--
+eq('课程形态：五阶课程（双拼/仓颉/速成/注音）', ['flypy', 'mspy', 'zhuyin', 'cangjie', 'quick'].map(sui.courseFormOf),
+  ['五阶课程', '五阶课程', '五阶课程', '五阶课程', '五阶课程']);
+eq('课程形态：全拼 = 提速课程', sui.courseFormOf('quanpin'), '提速课程');
+eq('课程形态：五笔 = 字根总表 + 自由练习', sui.courseFormOf('wubi86'), '字根总表 + 自由练习');
+eq('五笔灰调标签直陈（暂无五阶课程，不遮掩）', sui.cardTagOf('wubi86'), '字根总表 + 自由练习 · 暂无五阶课程');
+eq('余方案无灰调标签', Object.keys(SCHEMES).filter(id => id !== 'wubi86').every(id => sui.cardTagOf(id) === ''), true);
+
+// -- 变化面：形码隐藏二字词/多字词/整句（条目 20 纯逻辑面，§5.4）--
+eq('形码隐藏三模式（仓颉/速成/五笔）', ['cangjie', 'quick', 'wubi86'].every(id =>
+  JSON.stringify(sui.hiddenModesFor(SCHEMES[id])) === JSON.stringify(['words2', 'words34', 'sentences'])), true);
+eq('音码不隐藏（双拼/全拼/注音）', ['flypy', 'quanpin', 'zhuyin'].every(id => sui.hiddenModesFor(SCHEMES[id]).length === 0), true);
+
+// -- 切回态卡片摘要（条目 21 三态 1：课程第 N 阶 · 错词 X 条；五笔无课程阶不显课程段）--
+store.addMistake('flypy', { word: '双拼', py: 'shuang pin', errPos: 0 });
+store.addMistake('flypy', { word: '继续', py: 'ji xu', errPos: 1 });
+store.addMistake('ziranma', { word: '测试', py: 'ce shi', errPos: 1 });
+eq('小鹤摘要 = 课程第 5 阶 · 错词 2 条', sui.progressSummary('flypy'), '课程第 5 阶 · 错词 2 条');
+eq('自然码摘要 = 课程第 1 阶 · 错词 1 条', sui.progressSummary('ziranma'), '课程第 1 阶 · 错词 1 条');
+eq('五笔摘要不含课程段（降级形态无五阶）', sui.progressSummary('wubi86'), '');
+
+// -- 科普 details 块按方案数据驱动（§5.1 末段 / T5-D7）--
+eq('小鹤科普：翘舌换位自方案表派生（zh→V/ch→I/sh→U）', sui.schemeHelpOf(SCHEMES.flypy).body.includes('zh 在 <b>V</b>') && sui.schemeHelpOf(SCHEMES.flypy).body.includes('按两下'), true);
+eq('微软科普：o 引导零声母话术', sui.schemeHelpOf(SCHEMES.mspy).body.includes('O 引导'), true);
+eq('全拼科普 = 码即拼音', sui.schemeHelpOf(SCHEMES.quanpin).summary, '什么是全拼？');
+eq('注音标科普 = 声调成字', sui.schemeHelpOf(SCHEMES.zhuyin).body.includes('声调键'), true);
+eq('形码科普 = 字形拆解 + 仅单字取题', sui.schemeHelpOf(SCHEMES.cangjie).body.includes('字形') && sui.schemeHelpOf(SCHEMES.wubi86).body.includes('仅单字'), true);
+
 // -- sw.js 单测（桩环境：classic worker 脚本按模块导入，globals 先就位）--
 const swHandlers = {};
 globalThis.self = {
@@ -768,9 +816,10 @@ let installP = null;
 await runHandler('install', { waitUntil: (p) => { installP = p; } });
 await installP;
 const cacheName = (await globalThis.caches.keys())[0];
-eq('SW CACHE 串随版本 bump', cacheName, 'helian-v0.0.3-dev6');
+eq('SW CACHE 串随版本 bump', cacheName, 'helian-v0.0.3-dev7');
 const shellKeys = [...cacheStores.get(cacheName).keys()];
 eq('packs.js / licenses.html / courses.js / zhuyin.js / cangjie.js / wubi.js 入 SHELL', ['/js/packs.js', '/licenses.html', '/js/courses.js', '/js/zhuyin.js', '/js/cangjie.js', '/js/wubi.js'].every(u => shellKeys.includes(u)), true);
+eq('#7 新视图 js/css 入 SHELL（审计-§8 纪律）', ['/js/schemes-ui.js', '/css/schemes.css'].every(u => shellKeys.includes(u)), true);
 eq('pack 不进 SHELL（防 addAll 原子失败）', shellKeys.some(u => u.startsWith('/data/packs/')), false);
 
 const packUrlFull = 'http://localhost:4173/data/packs/cangjie5.v1.json';

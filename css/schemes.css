@@ -1,0 +1,178 @@
+/* 方案库视图 #/schemes + 顶栏方案芯片（SPEC-0003 §5，issue #7）。
+   视觉延续「深夜书法房」：墨色卡片 / Whisper Line / 朱砂·竹绿，只新增「方案卡」组件。
+   动效沿用 --ease，单效果 ≤240ms，仅 transform/opacity（§5.6）。 */
+
+/* ---- 顶栏方案芯片（品牌副标位演化，§5.2；触控目标 ≥44px）---- */
+.chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  min-height: 44px; padding: 4px 12px; margin-left: 8px;
+  background: transparent; border: 1px solid transparent; border-radius: 10px;
+  color: var(--ash); font-family: var(--sans); font-size: 0.82rem; font-weight: 500;
+  letter-spacing: 0.04em; cursor: pointer; white-space: nowrap;
+  transition: color 0.15s var(--ease), background 0.15s var(--ease), border-color 0.15s var(--ease);
+}
+.chip:hover, .chip[aria-expanded="true"] {
+  color: var(--bone); background: rgba(255, 255, 255, 0.05); border-color: var(--line);
+}
+.chip .chiparrow { color: var(--cinnabar); font-size: 0.7rem; }
+.chipbubble {
+  position: absolute; top: 58px; left: 96px; z-index: 31;
+  background: var(--raised); color: var(--bone); border: 1px solid rgba(217, 108, 79, 0.4);
+  font-size: 0.82rem; padding: 7px 12px; border-radius: 10px; white-space: nowrap;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45), 0 0 10px var(--cinnabar-subtle);
+  opacity: 0; transform: translateY(-4px); pointer-events: none;
+  transition: opacity 0.16s var(--ease), transform 0.16s var(--ease);
+}
+.chipbubble::before {
+  content: ""; position: absolute; top: -5px; left: 22px; width: 8px; height: 8px;
+  background: var(--raised); border-left: 1px solid rgba(217, 108, 79, 0.4);
+  border-top: 1px solid rgba(217, 108, 79, 0.4); transform: rotate(45deg);
+}
+.chipbubble.show { opacity: 1; transform: translateY(0); }
+
+/* ---- 芯片分组弹层（快切层：音码/形码两组 + 朱砂勾当前项 + 底部进方案库）---- */
+.schemepop {
+  position: absolute; top: 56px; left: 20px; z-index: 30; min-width: 230px;
+  background: rgba(23, 23, 28, 0.97); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--line); border-radius: 14px; padding: 8px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  animation: popRise 0.16s var(--ease);
+}
+@keyframes popRise { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+.popgroup { display: flex; flex-direction: column; padding: 4px 0; }
+.popgroup + .popgroup { border-top: 1px solid var(--line-subtle); }
+.pophead {
+  color: var(--ash-muted); font-size: 0.74rem; letter-spacing: 0.08em;
+  padding: 6px 10px 4px; user-select: none;
+}
+.schemepop button[data-scheme] {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  background: transparent; border: none; border-radius: 9px; cursor: pointer;
+  color: var(--ash); font-family: var(--sans); font-size: 0.9rem; font-weight: 500;
+  min-height: 40px; padding: 6px 10px; text-align: left;
+  transition: color 0.12s var(--ease), background 0.12s var(--ease);
+}
+.schemepop button[data-scheme]:hover, .schemepop button[data-scheme]:focus-visible {
+  color: var(--bone); background: rgba(255, 255, 255, 0.05); outline: none;
+}
+.schemepop .tick { width: 14px; font-style: normal; color: var(--cinnabar); font-weight: 700; }
+.schemepop button[data-scheme].cur { color: var(--bone); }
+.schemepop .poplib {
+  display: flex; align-items: center; justify-content: center; min-height: 42px;
+  margin-top: 6px; border-top: 1px solid var(--line-subtle); border-radius: 0 0 9px 9px;
+  color: var(--cinnabar); text-decoration: none; font-size: 0.88rem; font-weight: 600;
+  transition: background 0.12s var(--ease);
+}
+.schemepop .poplib:hover { background: var(--cinnabar-subtle); }
+
+/* ---- 方案库页（全信息层，§5.1）---- */
+.schemelib-head { margin-bottom: 18px; }
+.schemelib-head h1 { margin-bottom: 4px; }
+
+.scard {
+  background: var(--surface-card); border: 1px solid var(--line); border-radius: 16px;
+  padding: 18px 20px; display: flex; flex-direction: column; gap: 10px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  transition: border-color 0.15s var(--ease), transform 0.15s var(--ease), background 0.15s var(--ease);
+}
+.scard:hover { border-color: rgba(255, 255, 255, 0.16); transform: translateY(-2px); background: var(--surface-card-hover); }
+.scard-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.scard-name { font-size: 1.08rem; font-weight: 700; color: var(--bone); letter-spacing: -0.01em; }
+.paratag {
+  color: var(--ash); font-size: 0.72rem; padding: 2px 8px; border-radius: 20px;
+  border: 1px solid var(--line); background: rgba(255, 255, 255, 0.03); letter-spacing: 0.04em;
+}
+.flagbadge {
+  color: var(--cinnabar); font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em;
+  padding: 2px 9px; border-radius: 20px; background: var(--cinnabar-subtle);
+  border: 1px solid rgba(217, 108, 79, 0.35);
+}
+.scard-feat { color: var(--ash); font-size: 0.88rem; line-height: 1.55; margin: 0; }
+.scard-state { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; color: var(--ash); font-size: 0.8rem; margin: 0; }
+.formtag {
+  color: var(--bamboo); font-size: 0.76rem; padding: 2px 9px; border-radius: 20px;
+  background: rgba(127, 169, 140, 0.1); border: 1px solid rgba(127, 169, 140, 0.28);
+}
+.formtag.gray { /* 五笔 86 灰调降级标签：直陈不遮掩（T5-D6） */
+  color: var(--ash); background: rgba(255, 255, 255, 0.03); border-color: var(--line);
+}
+.scard-sum { color: var(--ash-muted); }
+.scard-progress { color: var(--bone); font-size: 0.86rem; margin: 0; }
+.scard-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: auto; padding-top: 2px; }
+.scard-actions .btn { min-height: 40px; padding: 7px 18px; font-size: 0.88rem; }
+.inuse {
+  display: inline-flex; align-items: center; min-height: 40px; padding: 0 14px;
+  color: var(--cinnabar); font-weight: 600; font-size: 0.9rem;
+  border: 1px solid rgba(217, 108, 79, 0.4); border-radius: 12px; background: var(--cinnabar-subtle);
+}
+.datastate { font-family: var(--mono); font-size: 0.78rem; color: var(--ash); }
+
+/* 旗舰大卡：朱砂左边界 + 全宽（T5-D1） */
+.scard.flagship {
+  border-left: 3px solid var(--cinnabar); margin-bottom: 26px;
+  background: linear-gradient(180deg, rgba(217, 108, 79, 0.05) 0%, var(--surface-card) 55%);
+}
+.scard.flagship .scard-feat { max-width: 70ch; }
+.scard.flagship .kbmini { max-width: 460px; }
+
+/* 五笔卡灰调：不遮掩不劝退，只降一档存在感（T5-D6） */
+.scard.degraded { border-style: dashed; }
+.scard.degraded .scard-name { color: var(--ash); }
+
+/* 分组标题 + 一行科普（§5.1） */
+.schemegroup { margin-top: 8px; }
+.schemegroup h2 { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin: 22px 0 12px; }
+.schemegroup h2 small { color: var(--ash); font-size: 0.84rem; font-weight: 400; }
+.schemegrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+@media (max-width: 1000px) { .schemegrid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 768px) { .schemegrid { grid-template-columns: 1fr; } .scard.flagship .kbmini { max-width: 100%; } }
+
+/* ---- 迷你键盘预览（复用 buildKeyboard 缩略模式：注音显数字行、形码显字根角标）---- */
+.kbmini {
+  padding: 6px 8px; gap: 3px; border-radius: 10px; max-width: 300px; width: 100%;
+  background: rgba(16, 16, 20, 0.6); box-shadow: none; backdrop-filter: none; margin: 0;
+}
+.kbmini .kbrow { gap: 3px; width: 100%; }
+.kbmini .key {
+  width: auto; flex: 1 1 0; min-width: 0; height: 20px; border-radius: 4px;
+  box-shadow: none; border-bottom-width: 1px; cursor: default;
+}
+.kbmini .key .sm { font-size: 8px; margin-top: 0; }
+.kbmini .key .ym { font-size: 5.5px; max-width: none; margin-top: 0; }
+.kbmini .key[data-key=" "] { flex: 5 1 0; }
+.kbmini .key.special { border-color: rgba(217, 108, 79, 0.3); }
+
+/* ---- 设置页「当前方案」摘要行（§5.2：下拉废除）---- */
+.schemeline { display: flex; align-items: center; gap: 12px; }
+.schemeline b { color: var(--bone); font-weight: 600; }
+
+/* ================= 过渡动效（§5.6，T5-D10/D11）================= */
+
+/* 视图入场：只做入场不做退场——升入淡入 160ms，旧视图 display:none 硬切 */
+@keyframes viewEnter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.view.enter { animation: viewEnter 0.16s var(--ease); }
+
+/* 键盘重建逐行级联升入：行距 30ms，四行总时长 ≤250ms */
+@keyframes kbRowRise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.kb.cascade .kbrow { animation: kbRowRise 0.16s var(--ease) both; }
+.kb.cascade .kbrow:nth-child(2) { animation-delay: 0.03s; }
+.kb.cascade .kbrow:nth-child(3) { animation-delay: 0.06s; }
+.kb.cascade .kbrow:nth-child(4) { animation-delay: 0.09s; }
+.kb.cascade .kbrow:nth-child(5) { animation-delay: 0.12s; }
+
+/* View Transitions 渐进增强（可选）：键盘新旧更替，时长收敛到 160ms */
+#kb { view-transition-name: kb; }
+::view-transition-old(kb), ::view-transition-new(kb) { animation-duration: 0.16s; animation-timing-function: var(--ease); }
+
+/* prefers-reduced-motion 全站兜底（§5.6 必补，现状零实现）：
+   级联/升入/淡入/抖动/击键粒子与 >100ms transition 一律停用；
+   时长压到 0.01ms 而非删除，保证 forwards 填充态（如结算卡）直达终态不留透明残影。 */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0ms !important;
+  }
+}

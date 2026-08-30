@@ -1,11 +1,12 @@
 import { BUILTIN } from './data.js';
-import { getScheme, SCHEME_LIST, SCHEMES } from './schemes.js';
+import { getScheme, SCHEMES } from './schemes.js';
 import { courseOf, confusKeys, confusEndsMatch, syllablesOf, challengeMatch } from './courses.js';
 import { sniffAndParse, mergeEntries, weightedSample, parsePlain } from './parsers.js';
 import { store, migrate } from './store.js';
 import { PACKS as DATA_PACKS, packState } from './packs.js';
 import { sound } from './sound.js';
 import { downloadShareCard } from './share.js';
+import { renderSchemeLibrary, initSchemeChip, hiddenModesFor, schemeHelpOf } from './schemes-ui.js';
 
 // v3 一次性幂等迁移：存量数据归 flypy 名下（§3.6），必须早于任何读取
 const MIGRATED = migrate();
@@ -25,27 +26,38 @@ function toast(msg) {
 if (MIGRATED === 'data') toast('历史本地数据已归入小鹤双拼名下');
 
 // ================= 路由 =================
-const VIEWS = ['practice', 'course', 'import', 'stats', 'mistakes', 'settings'];
+const VIEWS = ['practice', 'course', 'import', 'stats', 'mistakes', 'settings', 'schemes'];
+let lastView = '';
 function route() {
   const v = (location.hash || '#/practice').replace('#/', '');
   const target = VIEWS.includes(v) ? v : 'practice';
   for (const name of VIEWS) $('view-' + name).classList.toggle('hidden', name !== target);
   qsa('.nav a').forEach(a => a.classList.toggle('on', a.dataset.view === target));
+  if (target !== lastView) {
+    // 视图入场：只入不退——升入淡入 160ms；旧视图 display:none 硬切（§5.6）
+    const el = $('view-' + target);
+    el.classList.remove('enter');
+    void el.offsetWidth;
+    el.classList.add('enter');
+  }
+  lastView = target;
   if (target === 'stats') renderStats();
   if (target === 'mistakes') renderMistakes();
   if (target === 'course') renderCourse();
   if (target === 'import') renderImport();
   if (target === 'settings') loadSettingsUI();
+  if (target === 'schemes') renderSchemeLibrary($('schemelib'), libEnv);
 }
 addEventListener('hashchange', route);
 
 // ================= 键盘图（随方案 layout 重建）=================
 let keyEls = {};
 
-function buildKeyboard(container, { heat = false, map = false, onKey = null } = {}) {
+function buildKeyboard(container, { heat = false, map = false, onKey = null, preview = false } = {}, schemeArg) {
   container.innerHTML = '';
   const els = {};
-  const { ROWS, extraKeys, keyLabel, specialOf } = scheme.layout;
+  const sc = schemeArg || scheme;
+  const { ROWS, extraKeys, keyLabel, specialOf } = sc.layout;
   const rows = [...ROWS];
   if (extraKeys.length) rows.push(extraKeys.join(''));
   container.classList.toggle('wide', rows.some(r => r.length > 10)); // 41 键大千：弹性键宽（T4-Q5）
@@ -71,7 +83,7 @@ function buildKeyboard(container, { heat = false, map = false, onKey = null } = 
       el.onclick = () => gotoPractice('weak:' + ch);
       el.title += ' · 点击弱键特训';
     }
-  } else {
+  } else if (!preview) {
     for (const [ch, el] of Object.entries(els)) {
       el.onclick = onKey ? () => onKey(ch) : () => { // 触屏/鼠标点按输入（onKey=认知图点键看说明）
         const inbox = $('inbox');
@@ -103,24 +115,38 @@ async function ensurePack(s) {
 async function applyScheme(id) {
   const next = getScheme(id);
   const same = next.id === scheme.id;
-  if (same && !(next.packId && packState(next.packId) !== 'ready')) return; // 同方案且无需补载
+  if (same && !(next.packId && packState(next.packId) !== 'ready')) { updateChip(); return true; } // 同方案且无需补载
   scheme = next;
-  keyEls = buildKeyboard($('kb'));
+  rebuildKb();
   const s = store.getSettings();
   s.scheme = scheme.id;
   store.setSettings(s);
   stageIdx = store.getCourse(scheme.id).stage || 0;
   buildConfusButtons(); // 易混对按范式课程数据重建
+  applyModeBar(); // 形码隐藏二字词/多字词/整句（§5.4）
+  renderHelpBlock(); // 科普 details 块按当前方案数据驱动（§5.1）
   if (!$('view-course').classList.contains('hidden')) renderCourse();
   document.title = `鹤练 · ${scheme.name}练习`;
   $('inbox').setAttribute('aria-label', `输入${scheme.name}编码`);
-  const sel = $('setScheme');
-  if (sel) sel.value = scheme.id;
+  updateChip();
   // 练习中切换：立即重算 queue 重新出题（根治旧码残留，§5.4）
   if (!same) toast(queue.length && idx < queue.length ? `已切换：${scheme.name} · 本轮重新出题` : `已切换：${scheme.name}`);
-  await ensurePack(scheme);
-  if (queue.length && idx < queue.length) startSession(mode === 'finaldrill' ? 'chars' : mode);
-  else if (scheme.packId) startSession(mode); // pack 方案：就绪后按新表重新出题
+  const ok = await ensurePack(scheme);
+  if (!ok) return false;
+  // 变化面：形码下被隐藏的模式回落单字（§5.4）
+  if (!same && hiddenModesFor(scheme).includes(mode)) { mode = 'chars'; setModeButton(mode); }
+  startSession(mode === 'finaldrill' ? 'chars' : mode); // 一律按新方案重新出题/刷新空态
+  return true;
+}
+
+// 键盘重建：有 View Transitions 则渐进增强，否则回落级联入场（§5.6 可选增强）
+function rebuildKb() {
+  const build = () => { keyEls = buildKeyboard($('kb')); };
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (document.startViewTransition && !reduce) {
+    const t = document.startViewTransition(build);
+    t.ready.then(() => updateHighlight(pos)).catch(() => {});
+  } else build();
 }
 
 function clearKeys(els = keyEls) {
@@ -444,6 +470,7 @@ function renderParticles() {
 }
 
 function triggerImpact(x, y, isBig = false) {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return; // reduced-motion 停置击键粒子（§5.6）
   const colors = ['#D96C4F', '#EDEDEF', '#7FA98C', '#E47A5F'];
   const count = isBig ? 16 : 7;
   for (let i = 0; i < count; i++) {
@@ -553,6 +580,22 @@ function buildConfusButtons() {
     b.onclick = () => { setModeButton(b.dataset.mode); startSession(b.dataset.mode); };
     anchor.before(b);
   });
+}
+// 模式栏变化面（§5.4）：形码隐藏二字词/多字词/整句（v3 形码只取单字）；骨架其余不动
+function applyModeBar() {
+  const hidden = hiddenModesFor(scheme);
+  qsa('#modes button').forEach(b => {
+    if (['words2', 'words34', 'sentences'].includes(b.dataset.mode)) {
+      b.style.display = hidden.includes(b.dataset.mode) ? 'none' : '';
+    }
+  });
+}
+// 练习页科普 details 块：按当前方案数据驱动（§5.1 / T5-D7，不另起弹窗）
+function renderHelpBlock() {
+  const block = $('helpBlock');
+  const h = schemeHelpOf(scheme);
+  block.querySelector('summary').textContent = h.summary;
+  block.querySelector('.helpbody').innerHTML = h.body;
 }
 function setHintLevel(level) {
   hintLevel = level;
@@ -1142,7 +1185,7 @@ function loadSettingsUI() {
   $('setHl').checked = s.hlKeys;
   $('setImpact').checked = s.keyImpact !== false;
   $('setSound').checked = !!s.sound;
-  $('setScheme').value = s.scheme || 'flypy';
+  $('setSchemeNow').textContent = `${scheme.name} · ${scheme.paradigm === 'shape' ? '形码' : '音码'}`;
   qsa('input[name="hintSet"]').forEach(r => { r.checked = r.value === s.hintLevel; });
 }
 for (const [id, key] of [['setPy', 'showPy'], ['setCode', 'showCode'], ['setHl', 'hlKeys'], ['setImpact', 'keyImpact'], ['setSound', 'sound']]) {
@@ -1152,12 +1195,6 @@ for (const [id, key] of [['setPy', 'showPy'], ['setCode', 'showCode'], ['setHl',
     store.setSettings(s);
   });
 }
-// 方案下拉由注册表驱动（新增方案零改 UI）
-{
-  const sel = $('setScheme');
-  sel.innerHTML = SCHEME_LIST.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
-  sel.addEventListener('change', (e) => applyScheme(e.target.value));
-}
 $('hintSetGroup').addEventListener('change', (e) => { if (e.target.name === 'hintSet') setHintLevel(e.target.value); });
 $('resetAll').onclick = () => {
   if (confirm('确定重置全部本地数据？词库、统计、错词本都会清空。')) {
@@ -1166,12 +1203,25 @@ $('resetAll').onclick = () => {
   }
 };
 
+// ================= 方案库 / 芯片（#7：环境对象供 schemes-ui 渲染用）=================
+const libEnv = {
+  current: () => scheme,
+  applyScheme,
+  gotoPractice,
+  buildKeyboard,
+  toast,
+};
+const updateChip = initSchemeChip(libEnv);
+
 // ================= 启动 =================
 document.title = `鹤练 · ${scheme.name}练习`;
 $('inbox').setAttribute('aria-label', `输入${scheme.name}编码`);
 qsa('input[name="hint"]').forEach(r => { r.checked = r.value === hintLevel; });
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 buildConfusButtons();
+applyModeBar();
+renderHelpBlock();
+updateChip();
 renderStreak();
 route();
 (async () => {
