@@ -1,6 +1,6 @@
 {
   "name": "flypy-trainer",
-  "version": "0.0.5",
+  "version": "0.0.3",
   "scripts": {
     "build:packs": "node tools/build-packs.mjs"
   },
