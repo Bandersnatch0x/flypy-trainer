@@ -1,0 +1,13 @@
+{
+  "_meta": {
+    "about": "五笔 86 课程拆解标注源（SPEC-0004 §5.2；tracked、自写、自有版权）。机器草稿（tools/.cache，gitignored）仅作种子；人工逐字过目后以 src:'human' 定稿，分歧字写 note。标注即审计轨迹。",
+    "workflow": "draft（机器草稿，永不发货）→ 人工按 docs/research/v4-wubi-m1-review.md 清单逐字定稿为本文件 chars 条目（src:'human'）→ check 全绿 → build 出货。定稿字段：roots（字根形序列，展示层真值）/ keys（= 全码）/ kind?（键名|单笔画|成字字根）/ id?（识别码 {last, struct, key}）/ note?。",
+    "caliber": {
+      "code": "码权威 = 包内极点码表（rime/rime-wubi，LGPL-3.0）：一切 keys 与练习出码一致，不引入第二真值，教学与练习永不分叉。",
+      "decomp": "拆解 = 本站自写教学口径，遵循「取大优先 / 兼顾直观 / 能连不交」公开拆分原则；键位归属与取码规则是编码标准公有事实。"
+    },
+    "redline": "自建标注不得转抄 hantang/search-wubi（无 license、无授权链）；其私用区字根字形不入仓、不分发；若引用其展示思路须自绘。"
+  },
+  "chars": {},
+  "disputes": {}
+}
