@@ -9,6 +9,7 @@
     <view class="stages">
       <view wx:for="{{stages}}" wx:key="index"
         class="stage {{index === stageIdx ? 'on' : ''}} {{index < stageIdx ? 'done' : ''}}"
+        hover-class="stage-hover"
         data-i="{{index}}" bindtap="onStage">
         <text class="sn">{{index < stageIdx ? '✓' : index + 1}}</text>
         <view class="st"><text class="sname">{{item.name}}</text><text class="ssub">{{item.sub}}</text></view>
@@ -16,7 +17,7 @@
     </view>
 
     <!-- 七日挑战卡 -->
-    <view wx:if="{{challenge && !challenge.started}}" class="card chal" bindtap="startChallenge">
+    <view wx:if="{{challenge && !challenge.started}}" class="card chal" hover-class="chal-hover" bindtap="startChallenge">
       <text class="cname">七日挑战</text>
       <text class="csub">{{challenge.sub}}</text>
     </view>
@@ -51,7 +52,7 @@
             <view wx:if="{{g.label}}" class="dlabel">{{g.label}}</view>
             <view class="dkeys">
               <view wx:for="{{g.keys}}" wx:for-item="u" wx:key="id"
-                class="dkey" data-id="{{u.id}}" bindtap="drillUnit">
+                class="dkey" hover-class="dkey-hover" hover-stay-time="60" data-id="{{u.id}}" bindtap="drillUnit">
                 <text class="dm">{{u.main}}</text><text wx:if="{{u.sub}}" class="ds">{{u.sub}}</text>
                 <text wx:if="{{u.due}}" class="due">●</text>
               </view>
@@ -72,7 +73,7 @@
             <view class="dlabel">{{g.label}}<text wx:if="{{g.desc}}" class="csub"> {{g.desc}}</text></view>
             <view class="dkeys">
               <view wx:for="{{g.keys}}" wx:for-item="u" wx:key="key"
-                class="dkey" data-key="{{u.key}}" bindtap="onChipKey">
+                class="dkey" hover-class="dkey-hover" hover-stay-time="60" data-key="{{u.key}}" bindtap="onChipKey">
                 <text class="dm">{{u.main}}</text><text wx:if="{{u.sub}}" class="ds">{{u.sub}}</text>
               </view>
             </view>
@@ -82,6 +83,8 @@
         <view wx:if="{{vm.note}}" class="formnote">{{vm.note}}</view>
         <button wx:if="{{vm.note}}" class="btn primary" bindtap="goFree">自由练习 · 仅单字出题</button>
       </block>
-    <view wx:if="{{schemeId === 'wubi86'}}" class="formnote">拆解为本站教学口径。</view>
+
+      <view wx:if="{{schemeId === 'wubi86'}}" class="formnote">拆解为本站教学口径。</view>
+    </view>
   </block>
 </view>
