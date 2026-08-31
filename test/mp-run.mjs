@@ -1,6 +1,7 @@
 // 小程序逻辑层 node 回归：wx shim + 逐层断言（方案码/存储/迁移/包装载/引擎判定）。
 // 运行：node test/mp-run.mjs
 import { createRequire } from 'module';
+import { statSync } from 'node:fs';
 
 const storage = new Map();
 global.wx = {
@@ -33,7 +34,7 @@ eq('flypy 你好→nihc', getScheme('flypy').codeOf({ word: '你好', py: 'ni ha
 eq('flypy 单字 你→ni', getScheme('flypy').codeOf({ word: '你', py: 'ni' }), 'ni');
 eq('quanpin 你好→nihao', getScheme('quanpin').codeOf({ word: '你好', py: 'ni hao' }), 'nihao');
 ok('flypy plan 键数=码长', getScheme('flypy').planOf('nihc', { word: '你好', py: 'ni hao' }).keys.length === 4);
-ok('SCHEMES 十一件套齐（+粤拼，v4 同步）', ['flypy', 'mspy', 'sogou', 'abc', 'ziranma', 'quanpin', 'zhuyin', 'jyutping', 'cangjie', 'quick', 'wubi86'].every(id => SCHEMES[id]));
+  ok('SCHEMES 十二件套齐（+粤拼、五笔画，v4 同步）', ['flypy', 'mspy', 'sogou', 'abc', 'ziranma', 'quanpin', 'zhuyin', 'jyutping', 'stroke', 'cangjie', 'quick', 'wubi86'].every(id => SCHEMES[id]));
 
 console.log('== 存储 ==');
 eq('迁移首跑', migrate(), 'fresh');
@@ -227,6 +228,42 @@ console.log('== 粤拼（SPEC-0004 §2 小程序同步）==');
   ok('方案库音码组含粤拼（末位）', GROUPS[0].ids.at(-1) === 'jyutping');
   ok('粤拼卡一句话特点在案', !!CARD_FEATURES.jyutping);
   eq('粤拼范式标签不挂双拼', paradigmTags(jp), ['音码']);
+  engine.setScheme(fly);
+}
+
+console.log('== 五笔画（SPEC-0004 §3 小程序同步）==');
+{
+  const sk = getScheme('stroke');
+  const { courseOf, stageModes, challengeMatch } = req('./courses.js');
+  const { GROUPS, CARD_FEATURES, hiddenModesFor } = req('./schemes-ui.js');
+  const raw = req('../data/packs/stroke.v1.json');
+  const entries = Object.keys(raw).filter(k => !k.startsWith('_'));
+
+  eq('五笔画包可读', await loadPack('stroke').then(() => packState('stroke')), 'ready');
+  await sk.activate();
+  eq('五笔画包 6763 字', entries.length, 6763);
+  eq('五笔画包 raw ≤150KB', statSync(new URL('../miniprogram/data/packs/stroke.v1.json', import.meta.url)).size <= 150 * 1024, true);
+  eq('五笔画包署名与底本在案', [raw._meta.license, raw._meta.attribution.includes('數位發展部, CNS11643'), /方\/火\/必/.test(raw._meta.baseText)], ['LGPL-3.0', true, true]);
+  eq('stroke 单字查表', [sk.codeOf({ word: '飞' }), sk.codeOf({ word: '龙' }), sk.codeOf({ word: '必' })], ['zpn', 'hppzn', 'nznnp']);
+  eq('stroke 多字词不出题', sk.codeOf({ word: '中国', py: 'zhong guo' }), null);
+  eq('stroke plan 笔画标签', sk.planOf('hzhhz').keys.map(k => k.label), ['横', '折', '横', '横', '折']);
+  eq('stroke 五键康熙角标', ['h', 's', 'p', 'n', 'z'].map(k => sk.layout.keyLabel(k).sub), ['⼀', '⼁', '⼃', '⼂', '⼄']);
+  eq('stroke specialOf 全空', [...'abcdefghijklmnopqrstuvwxyz'].every(k => sk.layout.specialOf(k) === ''), true);
+
+  const c = courseOf('stroke');
+  eq('stroke 恰五阶', [c.stages.length, c.stages.map(s => s.kind)], [5, ['keys', 'drill', 'practice', 'practice', 'mistakes']]);
+  eq('stroke 五键操练组', [c.stages[1].unit, c.stages[1].groups[0].keys], ['symbol', ['h', 's', 'p', 'n', 'z']]);
+  eq('stroke 无词阶明确逐字连打', [c.stages[3].pools, c.stages[3].body.includes('词 = 逐字连打')], [['chars'], true]);
+  eq('stroke 笔顺阶按码长', stageModes(c.stages[2]), ['chars@len']);
+  eq('stroke 挑战阶模式可判定', [challengeMatch(c.challenge[2].match, 'chars@len', c), challengeMatch(c.challenge[3].match, 'chars', c)], [true, true]);
+  eq('stroke 形码组首位', GROUPS.find(g => g.id === 'shape').ids[0], 'stroke');
+  eq('stroke 卡片特点', CARD_FEATURES.stroke, '五键打字 · 形码第一步');
+  eq('stroke 隐藏所有词与整句模式', hiddenModesFor(sk), ['words2', 'words34', 'sentences']);
+  engine.setScheme(sk);
+  eq('stroke 引擎单字按码长可开局', engine.startSession('chars@len').status, 'ok');
+  ok('stroke 引擎 plan 使用笔画标签', engine.snapshot().planKeys.every(k => ['横', '竖', '撇', '捺', '折'].includes(k.label)), true);
+  engine.finish();
+  eq('stroke 引擎二字词全过滤', engine.startSession('words2').status, 'filtered');
   engine.setScheme(fly);
 }
 

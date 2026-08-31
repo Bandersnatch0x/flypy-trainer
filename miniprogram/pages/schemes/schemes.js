@@ -46,7 +46,7 @@ Page({
     }
     wx.showToast({ title: `已切换：${sc.name}`, icon: 'none' });
     this.onShow();
-    if (id === 'wubi86') wx.switchTab({ url: '/pages/course/course' }); // 五笔入口直达字根总表页（tab 页）
+    if (id === 'wubi86' || id === 'stroke') wx.switchTab({ url: '/pages/course/course' }); // 形码方案入口直达课程页
     else wx.navigateTo({ url: '/pages/practice/practice?mode=chars' });
   },
 });

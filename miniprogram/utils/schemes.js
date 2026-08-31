@@ -371,6 +371,44 @@ function makeWubi86() {
   return scheme;
 }
 
+// ---- 五笔画（笔画输入）：标准 shape 单字查表（SPEC-0004 §3.2，issue #11）----
+// 五键 = 横竖撇捺折；点归捺、提归横、带转折归折。无词码，逐笔输入。
+const SK_KEYS = ['h', 's', 'p', 'n', 'z'];
+const SK_STROKE = { h: '横', s: '竖', p: '撇', n: '捺', z: '折' };
+const SK_FORM = { h: '⼀', s: '⼁', p: '⼃', n: '⼂', z: '⼄' };
+const SK_TITLE = {
+  h: '横 · 提归横（提笔在此键）',
+  s: '竖 · 竖笔在此键',
+  p: '撇 · 撇笔在此键',
+  n: '捺 · 点归捺（点笔在此键）',
+  z: '折 · 带转折的笔画皆归此键（竖钩/横折钩/斜钩/卧钩一类）',
+};
+
+function makeStroke() {
+  const scheme = { id: 'stroke', name: '五笔画', paradigm: 'shape' };
+  const codeOf = (entry) => {
+    const word = entry && entry.word;
+    if (!word || [...word].length !== 1) return null;
+    return (scheme.table && scheme.table[word]) || null;
+  };
+  const planOf = (code) => ({
+    keys: [...String(code || '')].map((ch) => ({ key: ch, label: SK_STROKE[ch] || ch.toUpperCase(), note: '', role: 'root' })),
+    groups: [],
+  });
+  const keyLabel = (ch) => SK_STROKE[ch]
+    ? { main: ch.toUpperCase(), sub: SK_FORM[ch], title: `五笔画 · ${SK_TITLE[ch]} · 键 ${ch.toUpperCase()}` }
+    : { main: ch.toUpperCase(), sub: '', title: `键 ${ch.toUpperCase()} · 五笔画不使用` };
+  scheme.codeOf = codeOf;
+  scheme.planOf = planOf;
+  scheme.layout = {
+    ROWS: ROWS3, extraKeys: [], keyLabel,
+    specialOf: () => '',
+  };
+  scheme.activate = () => Promise.resolve();
+  scheme.YM = {}; scheme.SM_KEYS = {}; scheme.SM_NAME = {};
+  return bindPack(scheme, 'stroke');
+}
+
 const SCHEMES = {
   flypy: makeScheme({
     id: 'flypy', name: '小鹤双拼', zero: 'first', zeroDouble: true, jqxyV: true,
@@ -417,10 +455,11 @@ const SCHEMES = {
   jyutping: makeJyutping(), // 粤拼：带调字表 + 六调键近恒等派生（SPEC-0004 §2，issue #10）
   cangjie: makeShapeScheme({ id: 'cangjie', name: '仓颉', derive: (full) => full }), // 深教样板（T3-D1/D2）
   quick: makeShapeScheme({ id: 'quick', name: '速成', derive: quickOf }), // 官方变体：首尾二码，复用全五阶（T3-D4）
+  stroke: makeStroke(), // 五笔画：五键笔顺输入，形码入门（SPEC-0004 §3，issue #11）
   wubi86: makeWubi86(), // 全课程；课程包不可用时仅保留兼容兜底
 };
 
 const DEFAULT_SCHEME = 'flypy'; // 小鹤仍是旗舰与默认（map-Q3a）
 function getScheme(id) { return SCHEMES[id] || SCHEMES[DEFAULT_SCHEME]; }
 
-module.exports = { SCHEMES, DEFAULT_SCHEME, getScheme };
+module.exports = { SCHEMES, DEFAULT_SCHEME, getScheme, SK_KEYS };

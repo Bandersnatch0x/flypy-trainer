@@ -43,6 +43,7 @@ const { ZY_GROUPS } = require('./zhuyin.js');
 const { JP_SM_KEYS, JP_YM_KEYS, JP_TONE_KEY_LIST } = require('./jyutping.js');
 const { CJ_CATS, CJ_LETTERS } = require('./cangjie.js');
 const { WB_ZONES, WB_ROOTS } = require('./wubi.js');
+const { SK_KEYS } = require('./schemes.js');
 
 // ---- 双拼族（五变体共用骨架）----
 const SP_CONFUS = [
@@ -255,6 +256,42 @@ const QUICK_COURSE = {
   stages: quickStages, confus: CJ_CONFUS, challenge: CJ_CHALLENGE('短码单字', '词组热身'),
 };
 
+// ---- 五笔画（形码入门：五键认知 + 笔顺教学，SPEC-0004 §3.3，issue #11）----
+// 无词阶：官方码表无词码 → 阶 3 练高码长字节奏，明确「词 = 逐字连打」。
+const STROKE_COURSE = {
+  scheme: 'stroke', challengeSub: '每天一个小目标，七天练顺五笔画',
+  stages: [
+    { kind: 'keys', view: 'map', name: '五键认知', sub: '五键 h s p n z · 归类规则一图讲透',
+      body: '五笔画的码 = 按书写笔顺逐笔按键，只有五个键：横 H、竖 S、撇 P、捺 N、折 Z。三条归类规则务必记牢：<b>提归横</b>——提笔按 H；<b>点归捺</b>——点笔按 N；<b>带转折的笔画一律归折</b>——竖钩、横折钩、斜钩、卧钩都按 Z。键帽大字是字母键，角标是康熙笔画字形 ⼀⼁⼃⼂⼄；其余 21 键不使用。' },
+    { kind: 'drill', unit: 'symbol', groups: [
+        { label: `五笔画键 · ${SK_KEYS.length} 键一组`, keys: SK_KEYS },
+      ],
+      name: '五键操练', sub: '全站最轻操练 · 见笔知键（间隔重复）',
+      body: '题型只有一种：笔画（或例字首笔）→ 在哪键。点 → N，提 → H，带转折 → Z。五键一组，是全站最轻的操练。带 <b class="due-dot">●</b> 的键是到期待复习键（间隔重复调度）。' },
+    { kind: 'practice', pools: ['chars'], seq: 'len', name: '笔顺操练', sub: '先少笔后多笔 · 全提示即笔顺教学',
+      body: '从内置高频字池逐字出题，轮内按码长升序——先少笔字后多笔字。plan 逐笔展开、每一步的提示就是笔画名：开「全提示」练的就是笔顺本身。码长分布：截集常用字 1–29 笔（全码表 1–84 笔），峰在 10 笔上下（8–12 笔最密）。注意：笔顺底本与通行笔顺在少数字存在微差，教学从本站注明的底本。' },
+    { kind: 'practice', pools: ['chars'], name: '长字节奏', sub: '无词阶 · 词 = 逐字连打',
+      body: '五笔画没有词码——<b>词 = 逐字连打</b>：打完一个字的笔画，接着打下一个。本阶练高码长字的节奏与耐力。想练词组可切拼音系方案。' },
+    CJ_MISTAKES_STAGE,
+  ],
+  confus: [
+    { label: '方 · 底本有差', note: '底本笔顺 nhzp；此字笔顺与大陆通行规范有微差，人工抽检在案', role: 'root', keys: ['n', 'h', 'z', 'p'] },
+    { label: '火 · 底本有差', note: '底本笔顺 nppn；底本有差字一类，人工抽检在案', role: 'root', keys: ['n', 'p'] },
+    { label: '必 · 底本有差', note: '底本取 nznnp；上游同字另收异序 nznpn，人工抽检在案', role: 'root', keys: ['n', 'z', 'p'] },
+    { label: '土/士 · 形近同码', note: '土、士码皆 hsh：笔形笔序全同，辨在字形（上横长/下横长）', role: 'root', keys: ['h', 's'] },
+    { label: '己/已 · 形近同码', note: '己、已码皆 zhz：己开口、已半开，笔顺全同，辨在字形', role: 'root', keys: ['h', 'z'] },
+  ],
+  challenge: [
+    { tag: 'D1', label: '任意一轮热身', match: { any: true } },
+    { tag: 'D2', label: '五键操练一轮', match: { stage: 1 } },
+    { tag: 'D3', label: '笔顺操练一轮', match: { stage: 2 } },
+    { tag: 'D4', label: '长字节奏一轮', match: { stage: 3 } },
+    { tag: 'D5', label: '底本/形近对抗一轮', match: { prefix: 'confus' } },
+    { tag: 'D6', label: '限时冲刺一轮', match: { modes: ['sprint'] } },
+    { tag: 'D7', label: '混合综合一轮', match: { modes: ['mixed'] } },
+  ],
+};
+
 // ---- 五笔 86（全课程：课程包接载后五阶，§5.4–5.5，issue #13）----
 // 课程包失败时由页面显示可重试状态。
 const WB_ZONE_GROUPS = WB_ZONES.map(z => ({
@@ -311,6 +348,7 @@ const COURSES = {
   jyutping: JYUTPING_COURSE,
   cangjie: CANGJIE_COURSE,
   quick: QUICK_COURSE,
+  stroke: STROKE_COURSE,
   wubi86: WUBI_COURSE,
 };
 function courseOf(schemeId) { return COURSES[schemeId] || COURSES.flypy; }

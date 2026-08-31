@@ -4,7 +4,7 @@
 
 > 你的词库，只在你的浏览器里。
 
-![version](https://img.shields.io/badge/版本-v0.0.3-101014?style=flat-square&labelColor=17171c&color=7f9dd9)
+![version](https://img.shields.io/badge/版本-v0.0.4-101014?style=flat-square&labelColor=17171c&color=7f9dd9)
 ![static](https://img.shields.io/badge/纯静态-零后端-101014?style=flat-square&labelColor=17171c&color=d96c4f)
 ![scheme](https://img.shields.io/badge/小鹤双拼-flypy-101014?style=flat-square&labelColor=17171c&color=7fa98c)
 ![privacy](https://img.shields.io/badge/数据-仅本地-101014?style=flat-square&labelColor=17171c&color=8b8b93)

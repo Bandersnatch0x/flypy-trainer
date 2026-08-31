@@ -9,6 +9,7 @@ const PACKS = {
   cangjie5: { path: '../data/packs/cangjie5.v1.json',     name: '仓颉单字码表',    kb: 269 },
   zhuyin:   { path: '../data/packs/zhuyin-tones.v1.json', name: '注音带调数据',    kb: 33 },
   jyutping: { path: '../data/packs/jyutping-tones.v1.json', name: '粤拼带调数据',  kb: 34 },
+  stroke:   { path: '../data/packs/stroke.v1.json',       name: '五笔画笔顺码表',  kb: 132 },
 };
 
 const mem = new Map();   // id → 表（就绪后内存常驻）

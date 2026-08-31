@@ -1260,7 +1260,7 @@ let installP = null;
 await runHandler('install', { waitUntil: (p) => { installP = p; } });
 await installP;
 const cacheName = (await globalThis.caches.keys())[0];
-eq('SW CACHE 串随版本纪律递增（v4 开发周期 #13 M3 -dev11）', cacheName, 'helian-v0.0.3-dev11');
+eq('SW CACHE 串与发布版本同步（v0.0.4）', cacheName, 'helian-v0.0.4');
 const shellKeys = [...cacheStores.get(cacheName).keys()];
 eq('packs.js / licenses.html / courses.js / zhuyin.js / jyutping.js / cangjie.js / wubi.js 入 SHELL', ['/js/packs.js', '/licenses.html', '/js/courses.js', '/js/zhuyin.js', '/js/jyutping.js', '/js/cangjie.js', '/js/wubi.js'].every(u => shellKeys.includes(u)), true);
 eq('#7 新视图 js/css 入 SHELL（审计-§8 纪律）', ['/js/schemes-ui.js', '/css/schemes.css'].every(u => shellKeys.includes(u)), true);

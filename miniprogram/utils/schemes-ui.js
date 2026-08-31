@@ -8,12 +8,12 @@ const FLAGSHIP_ID = 'flypy'; // 旗舰·默认：顶层独享全宽大卡（T5-D
 
 // 三层分组（§5.1）：旗舰小鹤顶层 + 音码组/形码组各带一行科普。
 // 组内次序 = 音码：自然码/微软/搜狗/智能ABC（双拼子标签）→ 全拼 → 注音 → 粤拼（#10 追加末位，一期次序不动）；
-// 形码：仓颉 → 速成 → 五笔 86。
+// 形码：五笔画（形码入门）→ 仓颉 → 速成 → 五笔 86。
 const GROUPS = [
   { id: 'phonetic', title: '音码', blurb: '音码 · 码即读音（全拼、五种双拼、注音、粤拼）',
     ids: ['ziranma', 'mspy', 'sogou', 'abc', 'quanpin', 'zhuyin', 'jyutping'] },
-  { id: 'shape', title: '形码', blurb: '形码 · 码即字形（仓颉、速成、五笔）',
-    ids: ['cangjie', 'quick', 'wubi86'] },
+  { id: 'shape', title: '形码', blurb: '形码 · 码即字形（五笔画、仓颉、速成、五笔）',
+    ids: ['stroke', 'cangjie', 'quick', 'wubi86'] },
 ];
 
 // 卡片五层信息之一②：一句话特点（自然码/注音文案出自 T4 简报，§5.1）
@@ -28,6 +28,7 @@ const CARD_FEATURES = {
   jyutping: '六声调辨义 · 阴调单键、阳调同键双敲',
   cangjie: '字形拆成字母序列，熟字根即识码；速成取其首尾二码',
   quick: '速成 = 仓颉首尾二码，节奏更快',
+  stroke: '五键打字 · 形码第一步',
   wubi86: '五区字根 · 拆字逐步引导 · 词组 2+2',
 };
 
@@ -47,6 +48,7 @@ function cardTagOf(id) {
 // 变化面裁定（§5.4）：形码隐藏多字词/整句；五笔 86 放宽课程池二字词
 function hiddenModesFor(scheme) {
   if (!scheme || scheme.paradigm !== 'shape') return [];
+  if (scheme.id === 'stroke') return ['words2', 'words34', 'sentences'];
   if (scheme.id === 'wubi86') return ['words34', 'sentences'];
   return ['words2', 'words34', 'sentences'];
 }
