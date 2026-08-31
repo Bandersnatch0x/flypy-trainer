@@ -53,5 +53,6 @@
       <text class="skpm mono">{{item.kpm}} 键/分</text>
       <text class="ssecs mono">{{item.secs}}s</text>
     </view>
+    <view wx:if="{{hasMore}}" class="morebtn" bindtap="toggleMore" hover-class="more-hover">展开查看更早记录（共 {{totalCount}} 条）</view>
   </view>
 </view>

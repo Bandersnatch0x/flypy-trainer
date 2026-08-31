@@ -29,7 +29,7 @@
       <button class="btn" open-type="share">转发战绩</button>
       <button class="btn" bindtap="savePoster">保存海报</button>
     </view>
-    <view class="reshome" bindtap="goHome">返回首页</view>
+    <view class="reshome" bindtap="goHome" hover-class="link-hover">返回首页</view>
   </view>
 
   <!-- 空态 -->

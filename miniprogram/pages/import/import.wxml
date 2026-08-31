@@ -1,6 +1,6 @@
 <view class="page">
   <view class="sec">从文件导入</view>
-  <view class="card drop" bindtap="pickFile">
+  <view class="card drop" bindtap="pickFile" hover-class="drop-hover">
     <text class="d1">点按选取聊天中的词库文件</text>
     <text class="d2">支持输入法同步快照 / 词库 yaml / 自定义短语 / 「词 拼音」纯文本</text>
   </view>
@@ -18,19 +18,19 @@
 
   <view class="sec">自定义词单</view>
   <view class="card custom">
-    <textarea value="{{custom}}" placeholder="每行一条：词 拼音&#10;例：鹤练 he lian" bindinput="onCustomInput" auto-height maxlength="-1" />
-    <button class="btn primary" bindtap="addCustom">加入词单</button>
+    <textarea class="custom-input" value="{{custom}}" placeholder="每行一条：词 拼音&#10;例：鹤练 he lian" placeholder-class="ph-style" bindinput="onCustomInput" maxlength="-1" />
+    <button class="btn primary custom-btn" bindtap="addCustom">加入词单</button>
   </view>
 
   <view class="sec">已导入词库</view>
   <view wx:if="{{!libs.length}}" class="empty">尚未导入词库。</view>
   <view wx:for="{{libs}}" wx:key="name" class="card lib">
     <view class="info"><text class="lname">{{item.name}}</text><text class="lsub">{{item.time}} · {{item.n}} 条</text></view>
-    <button class="btn ghost" data-name="{{item.name}}" bindtap="removeLib">删除此库</button>
+    <button class="btn ghost danger" data-name="{{item.name}}" bindtap="removeLib">删除此库</button>
   </view>
   <view wx:if="{{libs.length}}" class="card lib">
     <view class="info"><text class="lname">当前练习池（合并去重后）</text><text class="lsub">{{poolLen}} 条，上限 20000</text></view>
-    <button class="btn ghost" bindtap="clearAll">清空全部</button>
+    <button class="btn ghost danger" bindtap="clearAll">清空全部</button>
   </view>
 
   <view class="sec">数据备份</view>

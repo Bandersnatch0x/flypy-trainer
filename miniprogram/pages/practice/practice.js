@@ -158,21 +158,27 @@ Page({
     const r = engine.press(ch);
     if (!r) return;
     if (r.ok) {
-      this.setData({ pressedKey: this.data.keyImpact ? ch : '', errKey: '', fb: '' });
-      if (this.data.keyImpact) setTimeout(() => { if (this.data.pressedKey === ch) this.setData({ pressedKey: '' }); }, 90);
       if (r.sessionDone) { this.showResult(r.result); return; }
-      this.render();
+      this.render({ pressedKey: this.data.keyImpact ? ch : '', errKey: '', fb: '' });
     } else {
       if (this.data.keyImpact) wx.vibrateShort({ type: 'light', fail: () => {} });
-      this.setData({ errKey: ch, fb: r.feedback });
-      setTimeout(() => { if (this.data.errKey === ch) this.setData({ errKey: '' }); }, 130);
-      if (r.cleared) this.render(); else this.renderMetrics();
+      if (r.cleared) {
+        this.render({ errKey: ch, fb: r.feedback });
+      } else {
+        const snap = engine.snapshot();
+        this.setData({
+          errKey: ch,
+          fb: r.feedback,
+          acc: snap.acc + '%',
+          combo: snap.combo,
+        });
+      }
     }
     if (this.data.keyboardMode === 'system') this.setData({ sysFocus: true });
   },
 
-  // ---- 渲染 ----
-  render() {
+  // ---- 渲染（单帧批处理，避免高频跨线程碎片调用） ----
+  render(extra = {}) {
     const snap = engine.snapshot();
     if (!snap.active) return;
     const it = snap.current;
@@ -181,7 +187,7 @@ Page({
     const at = planUnitAt(snap.planKeys, snap.pos);
     const curUnit = at && at.unit;
     const nxtUnit = at && snap.planKeys[at.index + 1];
-    this.setData({
+    const payload = {
       charStates: charStatesOf(it.word, it.plan, snap.pos, snap.expected.length),
       py: it.py.replace(/\s+/g, ' '),
       display: it.display,
@@ -191,11 +197,13 @@ Page({
       curKey: hl && curUnit ? curUnit.key : '',
       nextKey: hl && nxtUnit && (!curUnit || nxtUnit.key !== curUnit.key) ? nxtUnit.key : '',
       combo: snap.combo,
+      acc: snap.acc + '%',
       prog: this.data.mode === 'sprint' ? this.data.prog : Math.round((snap.idx / snap.queueLength) * 100),
       done: this.data.mode === 'sprint' ? String(snap.doneWords) : `${snap.idx}/${snap.queueLength}`,
       timeStr: this.data.mode === 'sprint' ? `0:${engine.SPRINT_SECS}` : this.data.timeStr,
-    });
-    this.renderMetrics();
+      ...extra,
+    };
+    this.setData(payload);
   },
 
   renderMetrics() {
@@ -209,18 +217,20 @@ Page({
     const total = snap.correctKeys + snap.wrongKeys;
     if (this.data.mode === 'sprint') {
       const left = engine.sprintLeft();
-      this.setData({
-        timeStr: `0:${String(left).padStart(2, '0')}`,
-        prog: Math.round(((engine.SPRINT_SECS - left) / engine.SPRINT_SECS) * 100),
-      });
       if (left <= 0) { this.showResult(engine.timeUp()); return; }
-      if (snap.startTime) this.setData({ speed: String(Math.round(total / ((Date.now() - snap.startTime) / 60000))) });
+      const newTimeStr = `0:${String(left).padStart(2, '0')}`;
+      const newProg = Math.round(((engine.SPRINT_SECS - left) / engine.SPRINT_SECS) * 100);
+      const newSpeed = snap.startTime ? String(Math.round(total / ((Date.now() - snap.startTime) / 60000))) : this.data.speed;
+      if (newTimeStr !== this.data.timeStr || newSpeed !== this.data.speed) {
+        this.setData({ timeStr: newTimeStr, prog: newProg, speed: newSpeed });
+      }
     } else if (snap.startTime) {
       const el = Math.floor((Date.now() - snap.startTime) / 1000);
-      this.setData({
-        timeStr: `${Math.floor(el / 60)}:${String(el % 60).padStart(2, '0')}`,
-        speed: String(Math.round(total / ((Date.now() - snap.startTime) / 60000))),
-      });
+      const newTimeStr = `${Math.floor(el / 60)}:${String(el % 60).padStart(2, '0')}`;
+      const newSpeed = String(Math.round(total / ((Date.now() - snap.startTime) / 60000)));
+      if (newTimeStr !== this.data.timeStr || newSpeed !== this.data.speed) {
+        this.setData({ timeStr: newTimeStr, speed: newSpeed });
+      }
     }
   },
 

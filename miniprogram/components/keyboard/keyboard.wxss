@@ -1,4 +1,4 @@
-/* 自绘键盘：rpx 自适应（键高 88rpx / 间隙 8rpx / 容器上限 820rpx），底部留安全区 */
+/* 自绘键盘：rpx 自适应（键高 88rpx / 间隙 8rpx / 容器上限 820rpx） */
 .kb {
   display: flex;
   flex-direction: column;
@@ -6,7 +6,8 @@
   gap: 8rpx;
   max-width: 820rpx;
   margin: 0 auto;
-  padding: 8rpx 8rpx calc(16rpx + env(safe-area-inset-bottom));
+  padding: 8rpx;
+  box-sizing: border-box;
 }
 .kbrow {
   display: flex;

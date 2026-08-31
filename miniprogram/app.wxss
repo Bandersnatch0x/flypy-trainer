@@ -7,11 +7,40 @@ page {
   --ok: #00E676;
   --err: #FF1744;
   --text: rgba(255, 255, 255, 0.92);
-  --ghost: #4A4A4A;
+  --muted: rgba(255, 255, 255, 0.65);
+  --ghost: #8A8E94;
   background: var(--bg);
   color: var(--text);
   font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", "PingFang SC", "Microsoft YaHei", sans-serif;
   font-size: 28rpx;
+}
+
+/* 微信原生按钮重置与暗色适配 */
+button {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-weight: normal;
+  font-size: 28rpx;
+  line-height: normal;
+  background: none;
+  border-radius: 0;
+  color: inherit;
+}
+button:not([size='mini']) {
+  width: auto;
+  margin-left: 0;
+  margin-right: 0;
+}
+button::after {
+  display: none;
+  border: none;
+}
+button[disabled] {
+  color: rgba(255, 255, 255, 0.35) !important;
+  background: rgba(255, 255, 255, 0.03) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  opacity: 1 !important;
 }
 
 .card {

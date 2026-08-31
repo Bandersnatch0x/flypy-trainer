@@ -37,4 +37,6 @@ Page({
 
   goSchemes() { wx.navigateTo({ url: '/pages/schemes/schemes' }); },
   goImport() { wx.navigateTo({ url: '/pages/import/import' }); },
+  goStats() { wx.switchTab({ url: '/pages/stats/stats' }); },
+  goMistakes() { wx.navigateTo({ url: '/pages/mistakes/mistakes' }); },
 });
