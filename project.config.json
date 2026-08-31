@@ -1,8 +1,8 @@
 {
   "miniprogramRoot": "miniprogram/",
   "compileType": "miniprogram",
-  "appid": "touristappid",
-  "projectname": "helian-flypy",
+  "appid": "wx588159dc1044ce0b",
+  "projectname": "鹤练",
   "libVersion": "latest",
   "setting": {
     "es6": true,
