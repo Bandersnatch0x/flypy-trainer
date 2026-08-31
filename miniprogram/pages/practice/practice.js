@@ -8,6 +8,10 @@ const { hiddenModesFor } = require('../../utils/schemes-ui.js');
 const { buildRows, streakOf, MODES } = require('../../utils/ui.js');
 const { planUnitAt } = require('../../utils/jyutping.js');
 
+// 键帽高亮/错闪的驻留时长（毫秒）。取原先 pressedKey 90ms 与 errKey 130ms
+// 的较长者，让错键抖动动画（kbshake 130ms）能完整播完。
+const KEY_FLASH_MS = 130;
+
 function charStatesOf(word, plan, pos, total) {
   const groups = (plan && plan.groups) || [];
   const chars = [...String(word)];
@@ -174,7 +178,20 @@ Page({
         });
       }
     }
+    this.scheduleKeyFlashReset();
     if (this.data.keyboardMode === 'system') this.setData({ sysFocus: true });
+  },
+
+  // 键帽高亮/错闪复位：合并成一个共享定时器，连续击键时不断重排，
+  // 只在停手那一刻写一次。不能改用纯 wxss 动画衰减——连按同一键时
+  // pressedKey 值不变、class 不变，动画不会重放，反馈会丢。
+  scheduleKeyFlashReset() {
+    clearTimeout(this.keyFlashTimer);
+    this.keyFlashTimer = setTimeout(() => {
+      if (this.data.pressedKey || this.data.errKey) {
+        this.setData({ pressedKey: '', errKey: '' });
+      }
+    }, KEY_FLASH_MS);
   },
 
   // ---- 渲染（单帧批处理，避免高频跨线程碎片调用） ----
