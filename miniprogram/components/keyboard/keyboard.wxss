@@ -17,6 +17,7 @@
 .key {
   flex: 1;
   min-width: 0;
+  min-height: 44px;
   height: 88rpx;
   display: flex;
   flex-direction: column;
@@ -27,7 +28,7 @@
   border-radius: 8rpx;
   transition: transform 60ms, border-color 80ms, background 80ms;
 }
-.kbrow.wide .key { height: 76rpx; } /* 41 键大行（注音/仓颉）压低换密度 */
+.kbrow.wide .key { height: 76rpx; min-height: 44px; } /* 41 键大行保留 44px 触控高度 */
 .key.special { flex: 1.6; }
 .key .sm { font-size: 30rpx; line-height: 1.1; color: var(--text); }
 .key .ym {

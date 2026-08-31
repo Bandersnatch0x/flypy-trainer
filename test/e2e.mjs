@@ -622,6 +622,20 @@ await pm.goto(BASE + '/#/practice', { waitUntil: 'networkidle' });
 let fit = await kbFit();
 check('375px 26 键形态行不溢出视口（禁分行/横滚）', fit.noScroll && fit.rowsIn);
 check('375px 键高 ≥44（触控基准按高执行）', fit.minH >= 44);
+await pm.setViewportSize({ width: 360, height: 667 });
+await pm.goto(BASE + '/#/practice', { waitUntil: 'networkidle' });
+fit = await kbFit();
+check('360px 26 键形态行不溢出视口', fit.noScroll && fit.rowsIn);
+check('360px 键高 ≥44', fit.minH >= 44);
+check('360px 键宽 ≥28 显示角标', await pm.locator('#kb .key').first().locator('.ym').evaluate(el => getComputedStyle(el).display !== 'none'));
+await pm.setViewportSize({ width: 345, height: 667 });
+await pm.goto(BASE + '/#/practice', { waitUntil: 'networkidle' });
+check('345px 键宽 <28 隐藏角标保留主字母', await pm.locator('#kb .key').first().locator('.ym').evaluate(el => getComputedStyle(el).display === 'none')
+  && await pm.locator('#kb .key').first().locator('.sm').innerText().then(t => t.length > 0));
+await switchScheme(pm, 'zhuyin', 1200);
+await pm.goto(BASE + '/#/practice', { waitUntil: 'networkidle' });
+check('345px 注音宽键键宽 <28 隐藏角标', await pm.locator('#kb .key').first().locator('.ym').evaluate(el => getComputedStyle(el).display === 'none'));
+await pm.setViewportSize({ width: 375, height: 667 });
 // 注音大千 41 键形态：数字行 11 键窄屏同样不溢出
 await switchScheme(pm, 'zhuyin', 1200);
 await pm.goto(BASE + '/#/practice', { waitUntil: 'networkidle' });
@@ -641,6 +655,13 @@ check('注音 - 键保持 ㄦ、空格 ˉ 宽键不动',
 await pm.goto(BASE + '/#/schemes', { waitUntil: 'networkidle' });
 check('预览迷你键盘同享调号角标（单一键位数据源）',
   await pm.locator('.scard[data-scheme="zhuyin"] .kbmini .key[data-key="6"] .ym').innerText().then(t => t === '6·ˊ'));
+await pm.goto(BASE + '/#/course', { waitUntil: 'networkidle' });
+const mapFit = await pm.evaluate(() => {
+  const rows = [...document.querySelectorAll('#kbmap .kbrow')];
+  const keys = [...document.querySelectorAll('#kbmap .key')];
+  return { rowsIn: rows.length > 0 && rows.every(r => { const b = r.getBoundingClientRect(); return b.left >= -0.5 && b.right <= innerWidth + 0.5; }), minH: Math.min(...keys.map(k => k.getBoundingClientRect().height)) };
+});
+check('375px 课程键盘不溢出且键高 ≥44', mapFit.rowsIn && mapFit.minH >= 44);
 await pm.close();
 await ctxM.close();
 

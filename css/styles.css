@@ -656,13 +656,10 @@ h2 { font-size: 1.12rem; font-weight: 600; margin: 28px 0 12px; color: var(--bon
   .kb:not(.kbmini) .key .ym, .kbmap .key .ym { max-width: 100%; }
 }
 
-/* v4 #12（T3-D3）：角标三下限之键宽下限 —— 键宽 <28px 隐角标保主字母。
-   弹性等宽下键宽随视口单调：≤345px 时最窄行（10 键行）键宽 <28px（320px 屏 ≈25px）；
-   字根详情经键图 title 与字根总表兜底，.special 描边键不藏。注音数字行角标为
-   数字/调号（非中文角标），不受可读性下限约束，.wide 不隐。 */
+/* v4 #12（T3-D3）：键宽 <28px 隐角标保主字母；键图 title/详情提供兜底。 */
 @media (max-width: 345px) {
-  .kb:not(.kbmini):not(.wide) .key .ym,
-  .kbmap:not(.wide) .key .ym { display: none; }
+  .kb:not(.kbmini) .key .ym,
+  .kbmap .key .ym { display: none; }
 }
 
 /* ---- V2 组件 ---- */
