@@ -252,13 +252,16 @@ function makeJyutping() {
   const planOf = (code, entry) => {
     const keys = [];
     const groups = [];
+    let physicalStart = 0;
     const syls = tonedSylsOf(entry);
     if (syls) {
       for (const s of syls) {
         const ks = jpPlanOfToned(s);
         if (!ks) return { keys: [], groups: [] };
-        groups.push({ syl: s, start: keys.length, len: ks.reduce((n, k) => n + (k.span || 1), 0) });
+        const len = ks.reduce((n, k) => n + (k.span || 1), 0);
+        groups.push({ syl: s, start: physicalStart, len });
         keys.push(...ks);
+        physicalStart += len;
       }
     } else {
       for (const ch of String(code || '')) keys.push({ key: ch, label: ch.toUpperCase(), note: '', role: '码键' });

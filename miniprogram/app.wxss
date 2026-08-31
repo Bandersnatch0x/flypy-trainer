@@ -1,4 +1,4 @@
-/* Obsidian Focus 设计令牌（Stitch 设计稿定稿配色，用户已确认） */
+/* Obsidian Focus 独立配色令牌（用户已确认） */
 page {
   --bg: #131313;
   --surface: #1A1A1A;

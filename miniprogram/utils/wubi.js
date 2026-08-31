@@ -69,9 +69,13 @@ function firstKeyOfWubi(entry, table, code) {
   return (entry && table && table[entry.word] && table[entry.word].keys?.[0]) || String(code || '')[0] || '';
 }
 
-function wubiWordCode(word, table) {
+function wubiWordCode(word, tableOrPack, courseChars) {
   const chs = [...String(word || '')];
-  if (chs.length !== 2 || !table) return null;
+  if (chs.length !== 2 || !tableOrPack) return null;
+  const table = tableOrPack._meta ? Object.fromEntries(Object.entries(tableOrPack).filter(([k]) => !k.startsWith('_'))) : tableOrPack;
+  const metaChars = tableOrPack._meta && tableOrPack._meta.courseChars;
+  const allowed = courseChars || metaChars;
+  if (!allowed || !chs.every(ch => allowed instanceof Set ? allowed.has(ch) : allowed.includes(ch))) return null;
   let code = '';
   for (const ch of chs) {
     const keys = table[ch] && table[ch].keys;
@@ -115,6 +119,8 @@ function fullStepsOf(e, rootNames) {
   }
   const rootSteps = Math.min(roots.length, keys.length);
   for (let i = 0; i < rootSteps; i++) {
+    const key = keys[i];
+    const label = roots[i] ? rootNameOf(roots[i], rootNames) : `第 ${i + 1} 键`;
     units.push({ key, label, note: `键 ${key.toUpperCase()}`, role: 'root' });
   }
   if (e.id && keys.length === roots.length + 1) {
@@ -158,10 +164,11 @@ function bindWubiCourse(scheme, pack) {
   for (const [k, v] of Object.entries(pack || {})) if (!k.startsWith('_')) table[k] = v;
   scheme.courseTable = table;
   scheme.rootNames = (pack && pack._meta && pack._meta.rootNames) || {};
+  const courseChars = pack && pack._meta && pack._meta.courseChars;
   const baseCodeOf = scheme.codeOf;
   scheme.codeOf = (entry) => {
     const word = entry && entry.word;
-    if (word && [...word].length === 2) return wubiWordCode(word, scheme.courseTable);
+    if (word && [...word].length === 2) return wubiWordCode(word, scheme.courseTable, courseChars);
     return baseCodeOf(entry);
   };
   scheme.planOf = (code, entry) => planOfWubi(code, entry, scheme.courseTable, scheme.rootNames);

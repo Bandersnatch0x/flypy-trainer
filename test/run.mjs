@@ -339,9 +339,11 @@ eq('jyutping-tones _meta 上游指纹（字/词两表）', /^[0-9a-f]{64}$/.test
 eq('jyutping-tones _meta CanCLID 署名', jyutPack._meta.attribution.includes('CanCLID'), true);
 eq('jyutping-tones raw ≤500KB（验收 1 预算）', fs.statSync(new URL('jyutping-tones.v1.json', packDir)).size <= 500 * 1024, true);
 eq('jyutping-tones 条数与 _meta 一致', entriesOf(jyutPack).length, jyutPack._meta.entries);
+eq('jyutping-tones 全量源表单字 ≥27,000', jyutPack._meta.sourceChars >= 27000 && jyutPack._meta.charEntries >= jyutPack._meta.sourceChars, true);
 const wbCoursePack = readPack('wubi86-course.v1.json');
 eq('PACKS 登记课程拆解包', PACKS['wubi86-course'] && PACKS['wubi86-course'].url, '/data/packs/wubi86-course.v1.json');
 eq('wubi86-course 出货条目数与 _meta 一致', entriesOf(wbCoursePack).length, wbCoursePack._meta.entries);
+eq('wubi86-course 明示 500 字课程池', [wbCoursePack._meta.courseChars.length, new Set(wbCoursePack._meta.courseChars).size], [500, 500]);
 eq('wubi86-course 出货仅 human', entriesOf(wbCoursePack).every(w => wbCoursePack[w].src === 'human'), true);
 eq('wubi86-course 两层口径在案', !!(wbCoursePack._meta.caliber && wbCoursePack._meta.caliber.code && wbCoursePack._meta.caliber.decomp), true);
 eq('wubi86 = GB2312 6,763 常用字', entriesOf(wubiPack).length, 6763);
@@ -366,6 +368,9 @@ eq('zhuyin 已知条目', [zhuyPack['北京'], zhuyPack['吗'], zhuyPack['我们
 eq('zhuyin 宽松选音清单在案', Array.isArray(zhuyPack._meta.fallbacks), true);
 // jyutping-tones：简繁桥后以简体为键、内置池字词全覆盖（#10 验收 2/6）
 eq('jyutping-tones 以简体为键覆盖内置池全部字词', uniqItems.every(e => typeof jyutPack[e.w] === 'string'), true);
+const builtinJyutChars = new Set(POOL.chars.map(e => e.w));
+const sourceOnlyJyutChar = entriesOf(jyutPack).find(w => [...w].length === 1 && !builtinJyutChars.has(w));
+eq('jyutping-tones 非内置源表字可查带调读音', !!sourceOnlyJyutChar && typeof jyutPack[sourceOnlyJyutChar] === 'string', true);
 eq('jyutping 值 = 逐字带调音节（1–6 调）', uniqItems.every(e => {
   const syls = (jyutPack[e.w] || '').split(' ');
   return syls.length === [...e.w].length && syls.every(s => /^[a-z]+[1-6]$/.test(s));
@@ -636,12 +641,16 @@ eq('jyutping.codeOf 单字阴调', jp.codeOf({ word: '中' }), 'zungv');
 eq('jyutping.codeOf 单字阳调（双敲）', [jp.codeOf({ word: '时' }), jp.codeOf({ word: '我' }), jp.codeOf({ word: '是' })],
   ['sivv', 'ngoxx', 'siqq']);
 eq('jyutping.codeOf 词组 = 逐音节键序连打', jp.codeOf({ word: '中国' }), 'zungvgwokq');
-eq('jyutping.codeOf 缺字 → null（取题过滤）', jp.codeOf({ word: '龘' }), null);
+eq('jyutping.codeOf 包外输入 → null（取题过滤）', jp.codeOf({ word: '🙂' }), null);
 eq('jyutping.displayOf = 带调粤拼串', [jp.displayOf({ word: '中国' }), jp.displayOf({ word: '你' })], ['zung1 gwok3', 'nei5']);
 const pJp = jp.planOf('zungvgwokq', { word: '中国' });
 eq('jyutping plan 扁平键序（词组 10 键位）', pJp.keys.map(k => k.key), ['z', 'u', 'n', 'g', 'v', 'g', 'w', 'o', 'k', 'q']);
 eq('jyutping plan roles（字母=ym、调键收尾）', [...new Set(pJp.keys.map(k => k.role))], ['ym', 'tone']);
 eq('jyutping plan groups（len 按击键数，双敲计 2）', pJp.groups, [{ syl: 'zung1', start: 0, len: 5 }, { syl: 'gwok3', start: 5, len: 5 }]);
+jp.table['是你'] = 'si6 nei5';
+eq('jyutping 多音节 groups.start 按物理 span 累计', jp.planOf('siqqneixx', { word: '是你' }).groups,
+  [{ syl: 'si6', start: 0, len: 4 }, { syl: 'nei5', start: 4, len: 5 }]);
+delete jp.table['是你'];
 const pJpY = jp.planOf('siqq', { word: '是' });
 eq('jyutping plan 阳调双敲呈现为单一单元（勿拆两单元，验收 4）', [pJpY.keys.length, pJpY.keys.at(-1).note], [3, '阳去 · 同键连按两下']);
 jp.table = null;
@@ -1094,10 +1103,15 @@ const WB_WORD_CASES = [
   ['我国', 'trlg'], ['土地', 'fffb'], ['学好', 'ipvb'], ['和好', 'tkvb'], ['十一', 'fggg'],
   ['同一', 'mggg'], ['国土', 'lgff'], ['中日', 'khjj'], ['打字', 'rspb'], ['明月', 'jeee'], ['女王', 'vvgg'],
 ];
-for (const [w, c] of WB_WORD_CASES) eq(`2+2 词码 ${w}`, wubiWordCode(w, WB_FX_TABLE), c);
-eq('2+2：字不在课程池 → null（出题过滤接缝）', wubiWordCode('中龙', WB_FX_TABLE), null);
-eq('2+2：非二字词 → null（三字及以上缓议，§1）', [wubiWordCode('王', WB_FX_TABLE), wubiWordCode('中国土', WB_FX_TABLE)], [null, null]);
+const WB_FX_COURSE_CHARS = Object.keys(WB_FX_TABLE);
+for (const [w, c] of WB_WORD_CASES) eq(`2+2 词码 ${w}`, wubiWordCode(w, WB_FX_TABLE, WB_FX_COURSE_CHARS), c);
+eq('2+2：字不在课程池 → null（出题过滤接缝）', wubiWordCode('中龙', WB_FX_TABLE, WB_FX_COURSE_CHARS), null);
+eq('2+2：非二字词 → null（三字及以上缓议，§1）', [wubiWordCode('王', WB_FX_TABLE, WB_FX_COURSE_CHARS), wubiWordCode('中国土', WB_FX_TABLE, WB_FX_COURSE_CHARS)], [null, null]);
+eq('2+2：未给课程池 → null（禁止按表条目隐式扩池）', wubiWordCode('中国', WB_FX_TABLE), null);
 eq('2+2：无表 → null', wubiWordCode('中国', null), null);
+const WB_REAL_TABLE = Object.fromEntries(Object.entries(wbCoursePack).filter(([k]) => !k.startsWith('_')));
+eq('真包课程池二字词精确 386 条', POOL.words2.filter(({ w }) => wubiWordCode(w, WB_REAL_TABLE, wbCoursePack._meta.courseChars)).length, 386);
+eq('教学扩展字不扩大词阶资格', ['集团', '身体', '土地'].map(w => wubiWordCode(w, WB_REAL_TABLE, wbCoursePack._meta.courseChars)), [null, null, null]);
 
 // -- 字根名映射与识别码注记料（§5.4/§5.5）--
 eq('变体形经 rootNames 映射（扌→手/氵→水/⺌→兴字头）',
@@ -1260,7 +1274,7 @@ let installP = null;
 await runHandler('install', { waitUntil: (p) => { installP = p; } });
 await installP;
 const cacheName = (await globalThis.caches.keys())[0];
-eq('SW CACHE 串与发布版本同步（v0.0.4）', cacheName, 'helian-v0.0.4');
+eq('SW CACHE 串按发布后开发节拍递增（v0.0.4-dev1）', cacheName, 'helian-v0.0.4-dev1');
 const shellKeys = [...cacheStores.get(cacheName).keys()];
 eq('packs.js / licenses.html / courses.js / zhuyin.js / jyutping.js / cangjie.js / wubi.js 入 SHELL', ['/js/packs.js', '/licenses.html', '/js/courses.js', '/js/zhuyin.js', '/js/jyutping.js', '/js/cangjie.js', '/js/wubi.js'].every(u => shellKeys.includes(u)), true);
 eq('#7 新视图 js/css 入 SHELL（审计-§8 纪律）', ['/js/schemes-ui.js', '/css/schemes.css'].every(u => shellKeys.includes(u)), true);

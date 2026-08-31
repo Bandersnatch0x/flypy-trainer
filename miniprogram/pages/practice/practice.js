@@ -163,7 +163,7 @@ Page({
       if (r.sessionDone) { this.showResult(r.result); return; }
       this.render();
     } else {
-      wx.vibrateShort({ type: 'light', fail: () => {} }); // D1.7：错键恒振动，与惩罚开关无关
+      if (this.data.keyImpact) wx.vibrateShort({ type: 'light', fail: () => {} });
       this.setData({ errKey: ch, fb: r.feedback });
       setTimeout(() => { if (this.data.errKey === ch) this.setData({ errKey: '' }); }, 130);
       if (r.cleared) this.render(); else this.renderMetrics();

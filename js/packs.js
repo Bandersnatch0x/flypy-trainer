@@ -10,7 +10,7 @@ export const PACKS = {
   'wubi86-course': { url: '/data/packs/wubi86-course.v1.json', name: '五笔 86 课程拆解', kb: 62 },
   cangjie5: { url: '/data/packs/cangjie5.v1.json',     name: '仓颉单字码表',    kb: 269 },
   zhuyin:   { url: '/data/packs/zhuyin-tones.v1.json', name: '注音带调数据',    kb: 33 },
-  jyutping: { url: '/data/packs/jyutping-tones.v1.json', name: '粤拼带调数据',  kb: 34 },
+  jyutping: { url: '/data/packs/jyutping-tones.v1.json', name: '粤拼带调数据',  kb: 383 },
   stroke:   { url: '/data/packs/stroke.v1.json',       name: '五笔画笔顺码表',  kb: 132 },
 };
 

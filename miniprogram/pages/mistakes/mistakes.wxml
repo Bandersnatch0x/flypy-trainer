@@ -1,7 +1,7 @@
 <view class="page">
   <view class="actions">
     <button class="btn primary" bindtap="train" disabled="{{empty}}">开始强化</button>
-    <button class="btn" bindtap="exportRime" disabled="{{empty}}">导出 Rime 短语</button>
+    <button class="btn" bindtap="exportRime" disabled="{{empty}}">导出输入法短语</button>
     <button class="btn ghost" bindtap="clear" disabled="{{empty}}">清空</button>
   </view>
   <view class="note">错词按「{{schemeName}}」记账；展示码随当前方案重派。</view>

@@ -263,7 +263,7 @@ const STROKE_COURSE = {
   stages: [
     { kind: 'keys', view: 'map', name: '五键认知', sub: '五键 h s p n z · 归类规则一图讲透',
       body: '五笔画的码 = 按书写笔顺逐笔按键，只有五个键：横 H、竖 S、撇 P、捺 N、折 Z。三条归类规则务必记牢：<b>提归横</b>——提笔按 H；<b>点归捺</b>——点笔按 N；<b>带转折的笔画一律归折</b>——竖钩、横折钩、斜钩、卧钩都按 Z。键帽大字是字母键，角标是康熙笔画字形 ⼀⼁⼃⼂⼄；其余 21 键不使用。' },
-    { kind: 'drill', unit: 'symbol', groups: [
+    { kind: 'drill', unit: 'symbol', oneKey: true, groups: [
         { label: `五笔画键 · ${SK_KEYS.length} 键一组`, keys: SK_KEYS },
       ],
       name: '五键操练', sub: '全站最轻操练 · 见笔知键（间隔重复）',

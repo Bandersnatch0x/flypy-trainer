@@ -82,9 +82,9 @@ function poolFor(mIn) {
 
 // 出题：码由当前方案 codeOf 派生；plan 为扁平键序。不可派生 → null 被过滤
 function prepareEntry(e) {
-  const code = scheme.codeOf(e);
+  const code = e.code || scheme.codeOf(e);
   if (!code) return null;
-  const plan = scheme.planOf(code, e);
+  const plan = e.plan || scheme.planOf(code, e);
   const display = scheme.displayOf ? scheme.displayOf(e) : null; // 注音：码文本显注音符号（§4.2）
   return { word: e.word, py: e.py || '', code, display: display || code, plan };
 }
@@ -123,23 +123,37 @@ function startDrill(st, first, seq) {
   wrongWordsThisSession = new Set();
   const chars = BUILTIN.chars.map(({ w, p }) => ({ word: w, py: p, weight: 1 }));
   let hit;
+  let required = [];
   if (drillUnit === 'syllable') {
     hit = chars.filter(e => syllablesOf(e.py).some(s => drillSeq.includes(s)));
   } else if (drillUnit === 'letter' || drillUnit === 'wbkey') {
     // 形码拆字操练：字根形反查题 + 课程字首码题
-    const rootWords = new Set(drillSeq.map(k => st.roots && Object.entries(st.roots).find(([, key]) => key === k)?.[0]).filter(Boolean));
-    const roots = [...rootWords].map(w => ({ word: w, py: '', weight: 3 }));
-    hit = [...roots, ...chars.filter(e => {
-      if (rootWords.has(e.word)) return false;
+    const rootPairs = Object.entries(st.roots || {}).filter(([, key]) => drillSeq.includes(key));
+    const rootWords = rootPairs.map(([word]) => word);
+    const rootSet = new Set(rootWords);
+    required = rootPairs.map(([word, key]) => ({
+      word, py: '', weight: 1, code: key,
+      plan: { keys: [{ key, label: word, note: `键 ${key.toUpperCase()}`, role: 'root' }], groups: [] },
+    }));
+    hit = chars.filter(e => {
+      if (rootSet.has(e.word)) return false;
       const c = scheme.codeOf(e);
       const first = scheme.courseTable && scheme.courseTable[e.word]
         ? firstKeyOfWubi(e, scheme.courseTable, c) : c && c[0];
       return first && drillSeq.includes(first);
-    })];
+    });
+  } else if (st.oneKey && drillUnit === 'symbol') {
+    required = drillSeq.map(key => {
+      const label = scheme.planOf(key).keys[0]?.label || key.toUpperCase();
+      return { word: label, py: '', weight: 1, code: key,
+        plan: { keys: [{ key, label, note: '', role: 'root' }], groups: [] } };
+    });
+    hit = [];
   } else {
     hit = chars.filter(e => entryTouchesKey(e, drillSeq, drillUnit === 'ymKey' ? 'ym' : undefined));
   }
-  const raw = weightedSample(hit, Math.min(SESSION_LEN, hit.length));
+  const remaining = Math.max(0, SESSION_LEN - required.length);
+  const raw = [...required, ...weightedSample(hit, Math.min(remaining, hit.length))];
   queue = raw.map(prepareEntry).filter(Boolean);
   if (!queue.length) { resetBoard(); return { status: 'empty' }; }
   idx = 0; doneWords = 0; startTime = 0; correctKeys = 0; wrongKeys = 0; combo = 0;

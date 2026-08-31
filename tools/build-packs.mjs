@@ -88,6 +88,7 @@ function parseRimeDict(text) {
 }
 
 const isCJK = (s) => /[\u3400-\u4DBF\u4E00-\u9FFF]/.test(s);
+const isHan = (s) => /^\p{Script=Han}$/u.test(s);
 
 // ---------- 1) wubi86.v1.json：GB2312 6,763 常用字 ----------
 function gb2312Set() {
@@ -270,12 +271,18 @@ function parseJpChars(text) {
   for (const cols of parseRimeDict(text)) {
     const [ch, pyRaw, wRaw] = cols;
     if (!ch || !pyRaw || [...ch].length !== 1) continue;
-    const toned = pyRaw.trim().toLowerCase();
-    if (!/^[a-z]+[1-6]$/.test(toned)) continue;
+    const toned = pyRaw.trim().toLowerCase().split(/\s+/).join(' ');
+    const syllables = toned.split(' ');
+    if (!syllables.length || !syllables.every(s => /^[a-z]+[1-6]$/.test(s))) continue;
     if (!reads.has(ch)) reads.set(ch, []);
     reads.get(ch).push({ t: toned, w: parseFloat((wRaw || '').replace('%', '')) || 0 });
   }
-  for (const rs of reads.values()) rs.sort((a, b) => b.w - a.w);
+  for (const rs of reads.values()) {
+    rs.sort((a, b) => {
+      const singleFirst = Number(a.t.includes(' ')) - Number(b.t.includes(' '));
+      return singleFirst || b.w - a.w;
+    });
+  }
   return reads;
 }
 
@@ -305,7 +312,9 @@ function buildJyutping(charText, wordText, builtin, s2t) {
     const pick = JP_READ_PICK[ch];
     return (pick && rs.find(r => r.t === pick)?.t) || rs[0].t;
   };
+  const sourceChars = [...reads.keys()].filter(isHan);
   const table = {};
+  for (const ch of sourceChars) table[ch] = reads.get(ch)[0].t;
   const missing = [];       // 桥后仍无读音的字（codeOf null 过滤，§2.2 风险②）
   const relaxedWords = [];  // 词表未收、按逐字择读拼接的词（词级变调未覆盖，在案）
   const seen = new Set();
@@ -333,7 +342,9 @@ function buildJyutping(charText, wordText, builtin, s2t) {
     if (ok) { table[w] = syls.join(' '); relaxedWords.push(w); }
     else missing.push(w);
   }
-  return { table, missing, relaxedWords, charCount: reads.size };
+  const charEntries = Object.keys(table).filter(k => [...k].length === 1).length;
+  const wordEntries = Object.keys(table).filter(k => [...k].length > 1).length;
+  return { table, missing, relaxedWords, sourceChars: sourceChars.length, charEntries, wordEntries };
 }
 
 function writeBridgeReview({ mapped, identity, mappedWordChars, poolUniq, missing, relaxedWords }) {
@@ -390,10 +401,14 @@ function buildStroke(rows, gb) {
 
 // ---------- 主流程 ----------
 const sha256 = (buf) => crypto.createHash('sha256').update(buf).digest('hex');
-const write = (name, obj) => {
+const write = (name, obj, maxBytes = null) => {
   const file = path.join(OUT_DIR, name);
-  fs.writeFileSync(file, JSON.stringify(obj));
-  const size = fs.statSync(file).size;
+  const raw = JSON.stringify(obj);
+  const size = Buffer.byteLength(raw);
+  if (maxBytes !== null && size > maxBytes) {
+    throw new Error(`${name} raw 超出上限：${size} bytes > ${maxBytes} bytes`);
+  }
+  fs.writeFileSync(file, raw);
   console.log(`[out] data/packs/${name}  ${(size / 1024).toFixed(1)} KB`);
 };
 
@@ -472,27 +487,47 @@ for (const [s, [t]] of Object.entries(JP_ONE_TO_MANY)) {
 }
 const jp = buildJyutping(jpCharBuf.toString('utf8'), jpWordBuf.toString('utf8'), BUILTIN, jpS2t);
 const jpPoolUniq = new Set([...BUILTIN.chars, ...BUILTIN.words2, ...BUILTIN.words34].map(e => e.w));
-const jpTableChars = Object.keys(jp.table).filter(k => [...k].length === 1);
 const jpMapped = Object.keys(jpS2t).length;
 const jpMappedWordChars = jpMapped - [...jpPoolUniq].filter(w => [...w].length === 1 && jpS2t[w]).length;
 const jpIdentity = [...jpPoolUniq].filter(w => [...w].length === 1 && !jpS2t[w]).length;
+const jpCourseChars = BUILTIN.chars.map(e => e.w);
+const jpCoveredCourseChars = jpCourseChars.filter(ch => jp.table[ch]).length;
+const jpCourseTones = new Set(jpCourseChars.flatMap(ch => (jp.table[ch] || '').match(/[1-6]/g) || []));
+if (jpCoveredCourseChars < 400) {
+  throw new Error(`粤拼简繁桥覆盖不足：课程字 ${jpCoveredCourseChars} < 400`);
+}
+if (jpCourseTones.size !== 6) {
+  throw new Error(`粤拼简繁桥六调覆盖不足：仅 ${[...jpCourseTones].sort().join(',')}`);
+}
 writeBridgeReview({ mapped: jpMapped, identity: jpIdentity, mappedWordChars: jpMappedWordChars, poolUniq: jpPoolUniq.size, missing: jp.missing, relaxedWords: jp.relaxedWords });
-console.log(`[info] jyutping-tones 覆盖 ${Object.keys(jp.table).length} 条（单字 ${jpTableChars.length}/500 池，词级逐字拼接 ${jp.relaxedWords.length}），桥 ${jpMapped} 映射（含词用字 ${jpMappedWordChars}）+${jpIdentity} 恒等，缺 ${jp.missing.length}${jp.missing.length ? '：' + jp.missing.join('') : ''}`);
-write('jyutping-tones.v1.json', {
+console.log(`[info] jyutping-tones 覆盖 ${Object.keys(jp.table).length} 条（源字 ${jp.sourceChars}，单字条目 ${jp.charEntries}，词级条目 ${jp.wordEntries}，词级逐字拼接 ${jp.relaxedWords.length}），桥 ${jpMapped} 映射（含词用字 ${jpMappedWordChars}）+${jpIdentity} 恒等，缺 ${jp.missing.length}${jp.missing.length ? '：' + jp.missing.join('') : ''}`);
+const jpPack = {
   _meta: {
-    id: 'jyutping-tones', v: 1, name: '粤拼带调数据 · 内置池字词（简繁桥后以简体为键）',
+    id: 'jyutping-tones', v: 1, name: '粤拼带调数据 · 全量单字与内置词级条目',
     source: 'CanCLID/rime-cantonese — jyut6ping3.chars.dict.yaml（带调单字表）+ jyut6ping3.words.dict.yaml（词级声调参照）',
     upstream: 'https://github.com/rime/rime-cantonese',
     upstreamSha256: sha256(jpCharBuf),
     upstreamWordsSha256: sha256(jpWordBuf),
     license: 'CC-BY-4.0', licenseUrl: 'https://creativecommons.org/licenses/by/4.0/',
     attribution: 'CanCLID 粤语计算语言学基础建设组（rime-cantonese）',
-    notes: '字集 = 内置池 data.js 字词；构建期简繁桥（自写映射小表 tools/jyutping/s2t.json）后以简体为键，运行时零映射；多音字取权重最高主流读；词首选上游词表整词命中（含变调），未收词按逐字主流读拼接（清单见 tools/jyutping/bridge-review.md）；jyut6ping3.maps（ODbL）不采用；懒音/模糊音容错不启用，教学取正音',
+    notes: '单字 = 上游 chars 源表全量去重字；普通字优先单音节主流读，无单音节时保留合法源值。另保留内置池简体 alias 与词级条目；构建期简繁桥后运行时零映射。多音字人工择读与逐字拼接清单见 tools/jyutping/bridge-review.md；jyut6ping3.maps（ODbL）不采用。',
+    sourceChars: jp.sourceChars,
+    charEntries: jp.charEntries,
+    wordEntries: jp.wordEntries,
     entries: Object.keys(jp.table).length,
-    bridge: { mapped: jpMapped, identity: jpIdentity, missing: jp.missing },
+    bridge: {
+      mode: 'simplified-alias',
+      status: 'passed',
+      mapped: jpMapped,
+      identity: jpIdentity,
+      coveredCourseChars: jpCoveredCourseChars,
+      courseTones: [...jpCourseTones].sort(),
+      missing: jp.missing,
+    },
   },
   ...jp.table,
-});
+};
+write('jyutping-tones.v1.json', jpPack, 500 * 1024);
 
 // ---- stroke ----
 const strokeBuf = await fetchUpstream('rime/rime-stroke', 'stroke.dict.yaml', 'stroke.dict.yaml');

@@ -657,10 +657,7 @@ h2 { font-size: 1.12rem; font-weight: 600; margin: 28px 0 12px; color: var(--bon
 }
 
 /* v4 #12（T3-D3）：键宽 <28px 隐角标保主字母；键图 title/详情提供兜底。 */
-@media (max-width: 345px) {
-  .kb:not(.kbmini) .key .ym,
-  .kbmap .key .ym { display: none; }
-}
+.key .ym.compact-hidden { display: none; }
 
 /* ---- V2 组件 ---- */
 .toast {

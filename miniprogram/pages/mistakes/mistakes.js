@@ -1,4 +1,4 @@
-// 错词本：按当前方案重派展示码（不存码快照，§3.6）；强化练习 / 清空 / Rime 导出。
+// 错词本：按当前方案重派展示码（不存码快照，§3.6）；强化练习 / 清空 / 输入法短语导出。
 const { getScheme, SCHEMES } = require('../../utils/schemes.js');
 const { store } = require('../../utils/store.js');
 
@@ -31,7 +31,7 @@ Page({
     });
   },
 
-  // Rime 自定义短语导出：码恒为小鹤双拼；写本机文件后经微信分享发出
+  // 兼容格式导出：码恒为小鹤双拼；写本机文件后经微信分享发出。
   exportRime() {
     const fly = SCHEMES.flypy;
     const mk = store.getMistakes(this.scheme.id);

@@ -40,9 +40,11 @@ const WUBI_CACHE = path.join(CACHE_DIR, 'wubi-decomp');
 const OUT_PACK = path.join(ROOT, 'data', 'packs', 'wubi86-course.v1.json');
 const ANNOT_FILE = path.join(ROOT, 'tools', 'wubi-course', 'annotations.json');
 const ROOTS_FILE = path.join(ROOT, 'tools', 'wubi-course', 'roots.json');
+const M1_GATE_FILE = path.join(ROOT, 'tools', 'wubi-course', 'm1-gate.json');
 const REVIEW_FILE = path.join(ROOT, 'docs', 'research', 'v4-wubi-m1-review.md');
 const REFRESH = process.argv.includes('--refresh');
 const ALL = process.argv.includes('--all');
+const COURSE_CHAR_COUNT = 500;
 
 fs.mkdirSync(WUBI_CACHE, { recursive: true });
 fs.mkdirSync(path.dirname(REVIEW_FILE), { recursive: true });
@@ -293,6 +295,64 @@ const lastOfRoot = (form, dict) => {
   return r && r.strokes ? r.strokes[r.strokes.length - 1] : null;
 };
 const keyOfRoot = (form, dict) => dict.ROOTS.get(form)?.key || null;
+
+// M1 gate is a shared prerequisite for check/build, so an untracked or invalid gate cannot pass either path.
+function loadM1Gate() {
+  if (!fs.existsSync(M1_GATE_FILE)) {
+    throw new Error(`M1 gate missing: ${path.relative(ROOT, M1_GATE_FILE)}`);
+  }
+
+  let gate;
+  try {
+    gate = JSON.parse(fs.readFileSync(M1_GATE_FILE, 'utf8'));
+  } catch (err) {
+    throw new Error(`M1 gate JSON invalid: ${err.message}`);
+  }
+
+  if (!gate || typeof gate !== 'object' || Array.isArray(gate)) {
+    throw new Error('M1 gate must be a JSON object');
+  }
+
+  const errors = [];
+  if (gate.stage !== 'M1') errors.push('stage must be M1');
+  if (gate.r1ToR5 !== true) errors.push('r1ToR5 must be true');
+  if (gate.fullSmoke !== true) errors.push('fullSmoke must be true');
+
+  const isFiniteNumber = (value) => typeof value === 'number' && Number.isFinite(value);
+  if (!isFiniteNumber(gate.manualHours) || gate.manualHours < 0) {
+    errors.push('manualHours must be a non-negative number');
+  }
+  if (!isFiniteNumber(gate.manualHoursLimit) || gate.manualHoursLimit < 0) {
+    errors.push('manualHoursLimit must be a non-negative number');
+  }
+  if (gate.manualHoursLimit !== 12) {
+    errors.push('manualHoursLimit must equal the approved 12-hour M1 limit');
+  }
+  if (isFiniteNumber(gate.manualHours) && isFiniteNumber(gate.manualHoursLimit)
+    && gate.manualHours > gate.manualHoursLimit) {
+    errors.push(`manualHours=${gate.manualHours} exceeds manualHoursLimit=${gate.manualHoursLimit}`);
+  }
+  if (gate.manualHoursIsExact !== false) {
+    errors.push('manualHoursIsExact must be false for the commit-window proxy');
+  }
+  if (typeof gate.manualHoursBasis !== 'string' || !gate.manualHoursBasis.trim()) {
+    errors.push('manualHoursBasis must be non-empty');
+  }
+  if (typeof gate.evidence !== 'string' || !gate.evidence.trim()) {
+    errors.push('evidence must be non-empty');
+  } else {
+    const evidenceFile = path.resolve(ROOT, gate.evidence);
+    const relativeEvidence = path.relative(ROOT, evidenceFile);
+    if (relativeEvidence.startsWith('..') || path.isAbsolute(relativeEvidence)) {
+      errors.push('evidence must stay inside the repository');
+    } else if (!fs.existsSync(evidenceFile) || !fs.statSync(evidenceFile).isFile()) {
+      errors.push(`evidence file missing: ${gate.evidence}`);
+    }
+  }
+
+  if (errors.length) throw new Error(`M1 gate failed: ${errors.join('; ')}`);
+  return gate;
+}
 
 // ---------- 全码真值（双源） ----------
 function buildTruth(srcIdx, crossIdx) {
@@ -559,6 +619,7 @@ function ruleCheck(ch, entry, dict, truth, pack, annotations) {
 }
 
 async function cmdCheck() {
+  loadM1Gate();
   const rootsJson = loadRoots();
   const dict = buildDict(rootsJson);
   const pack = loadPack();
@@ -694,9 +755,14 @@ async function cmdCheck() {
 
 // ---------- build 阶段 ----------
 async function cmdBuild() {
+  loadM1Gate();
   const rootsJson = loadRoots();
   const dict = buildDict(rootsJson);
   const pack = loadPack();
+  const courseChars = await loadBuiltin();
+  if (courseChars.length !== COURSE_CHAR_COUNT) {
+    throw new Error(`课程池字数异常：${courseChars.length} ≠ ${COURSE_CHAR_COUNT}`);
+  }
   const srcBuf = await fetchUpstream('rime/rime-wubi', 'wubi86.dict.yaml', 'wubi86.dict.yaml');
   const crossBuf = await fetchUpstream('KyleBing/rime-wubi86-jidian', 'wubi86_jidian.dict.yaml', 'wubi86_jidian.dict.yaml');
   const srcIdx = codeIndex(parseRimeDict(srcBuf.toString('utf8')));
@@ -752,6 +818,7 @@ async function cmdBuild() {
       },
       disputes,
       rootNames: rootsJson.names,
+      courseChars,
       entries: Object.keys(chars).length,
     },
     ...chars,

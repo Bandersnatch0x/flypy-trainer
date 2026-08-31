@@ -16,6 +16,7 @@ const req = createRequire(new URL('../miniprogram/utils/', import.meta.url));
 const { SCHEMES, getScheme } = req('./schemes.js');
 const { store, migrate } = req('./store.js');
 const { loadPack, packState, bindPack, lookupChars, __resetForTest } = req('./packs.js');
+const { BUILTIN } = req('./data.js');
 const engine = req('./engine.js');
 
 let passed = 0, failed = 0;
@@ -65,6 +66,22 @@ eq('小程序五笔课程包可读', packState('wubi86-course'), 'ready');
 ok('小程序五笔课程表已绑定', !!wb.courseTable && Object.keys(wb.courseTable).length >= 500, true);
 ok('五笔查表非空', typeof wb.codeOf({ word: '你', py: 'ni' }) === 'string' && wb.codeOf({ word: '你', py: 'ni' }).length > 0);
 eq('五笔键帽角标字根全列', wb.layout.keyLabel('g').sub, '王 戋 五 一');
+eq('小程序五笔普通课程字 full plan 可展开', wb.planOf(wb.courseTable['中'].keys, { word: '中' }).keys.map(k => k.key), [...wb.courseTable['中'].keys]);
+eq('小程序五笔词阶精确 386 条', BUILTIN.words2.filter(({ w }) => wb.codeOf({ word: w })).length, 386);
+eq('小程序教学扩展字不扩大词阶资格', ['集团', '身体', '土地'].map(word => wb.codeOf({ word })), [null, null, null]);
+{
+  const wbDrill = req('./courses.js').courseOf('wubi86').stages[1];
+  engine.setScheme(wb);
+  eq('五笔 G 键字根题可开局', engine.startDrill(wbDrill, 'g', ['g']).status, 'ok');
+  const roots = [];
+  for (let i = 0; i < 4; i++) {
+    const snap = engine.snapshot();
+    roots.push([snap.current.word, snap.expected, snap.planKeys.length]);
+    engine.press(snap.expected);
+  }
+  eq('五笔 G 键四个字根固定入队且均为单键题', roots,
+    [['王', 'g', 1], ['戋', 'g', 1], ['五', 'g', 1], ['一', 'g', 1]]);
+}
 eq('lookupChars 缺字', lookupChars(wb.table, '龘龘龘龘龘'), null);
 await loadPack('cangjie5');
 const cj = getScheme('cangjie');
@@ -165,6 +182,7 @@ console.log('== 粤拼（SPEC-0004 §2 小程序同步）==');
 {
   const jpm = req('./jyutping.js');
   const jp = getScheme('jyutping');
+  const jpRaw = req('../data/packs/jyutping-tones.v1.json');
   const { courseOf, stageModes, challengeMatch } = req('./courses.js');
   const { GROUPS, CARD_FEATURES } = req('./schemes-ui.js');
   const { paradigmTags } = req('./ui.js');
@@ -180,12 +198,18 @@ console.log('== 粤拼（SPEC-0004 §2 小程序同步）==');
   // 包激活与查表
   await loadPack('jyutping');
   eq('粤拼包就绪', packState('jyutping'), 'ready');
+  eq('粤拼包全量单字与预算', [jpRaw._meta.sourceChars >= 27000, jpRaw._meta.charEntries >= 27000,
+    statSync(new URL('../miniprogram/data/packs/jyutping-tones.v1.json', import.meta.url)).size <= 500 * 1024], [true, true, true]);
   await jp.activate();
   eq('jyutping.codeOf 单字阴调', jp.codeOf({ word: '中' }), 'zungv');
   eq('jyutping.codeOf 词组连打', jp.codeOf({ word: '中国' }), 'zungvgwokq');
   eq('jyutping.displayOf 带调串', jp.displayOf({ word: '中国' }), 'zung1 gwok3');
   const pJp = jp.planOf('zungvgwokq', { word: '中国' });
   eq('jyutping plan groups（双敲计 2）', pJp.groups, [{ syl: 'zung1', start: 0, len: 5 }, { syl: 'gwok3', start: 5, len: 5 }]);
+  jp.table['是你'] = 'si6 nei5';
+  eq('jyutping 多音节 groups.start 按物理 span 累计', jp.planOf('siqqneixx', { word: '是你' }).groups,
+    [{ syl: 'si6', start: 0, len: 4 }, { syl: 'nei5', start: 4, len: 5 }]);
+  delete jp.table['是你'];
   eq('jyutping 26 键零布局', jp.layout.ROWS.join('').length + jp.layout.extraKeys.length, 26);
   eq('jyutping 调键角标', [jp.layout.keyLabel('v').sub, jp.layout.keyLabel('x').sub, jp.layout.keyLabel('q').sub], ['调1/4', '调2/5', '调3/6']);
 
@@ -260,6 +284,14 @@ console.log('== 五笔画（SPEC-0004 §3 小程序同步）==');
   eq('stroke 卡片特点', CARD_FEATURES.stroke, '五键打字 · 形码第一步');
   eq('stroke 隐藏所有词与整句模式', hiddenModesFor(sk), ['words2', 'words34', 'sentences']);
   engine.setScheme(sk);
+  const strokeKeys = [];
+  eq('stroke 五键单键操练可开局', engine.startDrill(c.stages[1], 'h', ['h', 's', 'p', 'n', 'z']).status, 'ok');
+  for (let i = 0; i < 5; i++) {
+    const snap = engine.snapshot();
+    strokeKeys.push([snap.current.word, snap.expected, snap.planKeys.length]);
+    engine.press(snap.expected);
+  }
+  eq('stroke 五键题均为一笔画见键', strokeKeys, [['横', 'h', 1], ['竖', 's', 1], ['撇', 'p', 1], ['捺', 'n', 1], ['折', 'z', 1]]);
   eq('stroke 引擎单字按码长可开局', engine.startSession('chars@len').status, 'ok');
   ok('stroke 引擎 plan 使用笔画标签', engine.snapshot().planKeys.every(k => ['横', '竖', '撇', '捺', '折'].includes(k.label)), true);
   engine.finish();

@@ -2,7 +2,7 @@
   <view class="sec">从文件导入</view>
   <view class="card drop" bindtap="pickFile">
     <text class="d1">点按选取聊天中的词库文件</text>
-    <text class="d2">支持 Rime userdb 导出 / 词库 yaml / 自定义短语 / 「词 拼音」纯文本</text>
+    <text class="d2">支持输入法同步快照 / 词库 yaml / 自定义短语 / 「词 拼音」纯文本</text>
   </view>
   <view wx:if="{{report}}" class="report">
     <view wx:for="{{report}}" wx:key="index" class="line {{item.bad ? 'bad' : ''}} {{item.note ? 'note' : ''}}">

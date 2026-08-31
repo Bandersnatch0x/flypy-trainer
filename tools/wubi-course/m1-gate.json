@@ -1,0 +1,10 @@
+{
+  "stage": "M1",
+  "r1ToR5": true,
+  "fullSmoke": true,
+  "manualHours": 6.97,
+  "manualHoursLimit": 12,
+  "manualHoursIsExact": false,
+  "manualHoursBasis": "Git 提交时间区间上界代理，不是精确人工时长。",
+  "evidence": "tools/wubi-course/m1-evidence.md"
+}
