@@ -1,0 +1,98 @@
+.page {
+  padding: 24rpx 24rpx 48rpx;
+}
+
+.head {
+  padding: 8rpx 8rpx 24rpx;
+}
+.title {
+  display: block;
+  font-size: 40rpx;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 12rpx;
+}
+.lead {
+  display: block;
+  font-size: 24rpx;
+  line-height: 1.7;
+  color: var(--muted);
+}
+
+.src,
+.thanks {
+  padding: 24rpx;
+  margin-bottom: 20rpx;
+}
+
+.srchead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12rpx;
+}
+.sname {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: var(--text);
+}
+.lic {
+  font-size: 20rpx;
+  color: var(--accent);
+  border: 2rpx solid var(--accent);
+  border-radius: 8rpx;
+  padding: 2rpx 10rpx;
+  flex-shrink: 0;
+  margin-left: 16rpx;
+}
+.lic.own {
+  color: var(--ghost);
+  border-color: var(--stroke);
+}
+
+.sbody {
+  display: block;
+  font-size: 24rpx;
+  line-height: 1.75;
+  color: var(--muted);
+}
+
+.url {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 16rpx;
+  padding: 12rpx 16rpx;
+  background: var(--bg);
+  border: 2rpx solid var(--stroke);
+  border-radius: 10rpx;
+}
+.url-hover {
+  border-color: var(--accent);
+}
+.utext {
+  font-size: 22rpx;
+  color: var(--muted);
+  word-break: break-all;
+  margin-right: 16rpx;
+}
+.ucopy {
+  font-size: 22rpx;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.thanks {
+  margin-top: 8rpx;
+}
+.thanks .sname {
+  display: block;
+  margin-bottom: 12rpx;
+}
+
+.foot {
+  padding: 16rpx 8rpx;
+  font-size: 22rpx;
+  color: var(--ghost);
+  text-align: center;
+}

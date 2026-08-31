@@ -4,30 +4,35 @@
     <text class="sub">双拼 · 全拼 · 注音 · 形码，键上练字</text>
   </view>
 
-  <button class="btn primary big" bindtap="goPractice">开始练习</button>
+  <button class="btn primary big" bindtap="goPractice" hover-class="btn-hover">开始练习</button>
 
   <view class="card rows">
-    <view class="row" data-url="/pages/schemes/schemes" bindtap="go">
+    <view class="row" data-url="/pages/schemes/schemes" bindtap="go" hover-class="row-hover">
       <text>方案库</text><text class="val">当前：{{schemeName}} →</text>
     </view>
-    <view class="row" data-url="/pages/import/import" bindtap="go">
+    <view class="row" data-url="/pages/import/import" bindtap="go" hover-class="row-hover">
       <text>导入 / 词表集市</text><text class="val">→</text>
     </view>
-    <view class="row" data-url="/pages/mistakes/mistakes" bindtap="go">
+    <view class="row" data-url="/pages/mistakes/mistakes" bindtap="go" hover-class="row-hover">
       <text>错词本</text><text class="val">→</text>
     </view>
-    <view class="row" data-url="/pages/settings/settings" bindtap="go">
+    <view class="row" data-url="/pages/settings/settings" bindtap="go" hover-class="row-hover">
       <text>设置</text><text class="val">→</text>
+    </view>
+    <view class="row" data-url="/pages/licenses/licenses" bindtap="go" hover-class="row-hover">
+      <text>数据来源与许可</text><text class="val">→</text>
+    </view>
+    <view wx:if="{{hasPrivacyContract}}" class="row" bindtap="openPrivacy" hover-class="row-hover">
+      <text>隐私保护指引</text><text class="val">→</text>
     </view>
   </view>
 
-  <button class="btn share" open-type="share">分享给朋友</button>
+  <button class="btn share" open-type="share" hover-class="btn-hover">分享给朋友</button>
 
   <view class="about card">
     <view class="aline">纯本地工具：无账号、无网络请求、无数据上传。相册权限仅用于保存成绩海报。</view>
     <view class="aline">练习记录、词库与错词本全部保存在你的设备上。</view>
     <view class="aline">与网页版 helian 同源：同一套课程、统计与方案引擎。</view>
-    <view class="aline">形码与注音码表按对应许可证提供，许可说明见网页版出处页。</view>
-    <view class="aline">粤拼带调字表按 CC-BY-4.0 提供，署名信息见网页版出处页。</view>
+    <view class="aline">形码与注音码表按 LGPL-3.0 提供，粤拼带调字表按 CC-BY-4.0 提供；出处、署名与改动说明见上方「数据来源与许可」。</view>
   </view>
 </view>
