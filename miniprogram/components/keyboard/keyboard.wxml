@@ -2,7 +2,7 @@
   <view wx:for="{{rows}}" wx:key="index" wx:for-item="row" class="kbrow {{row.length > 10 ? 'wide' : ''}}">
     <view
       wx:for="{{row}}" wx:key="key" wx:for-item="k"
-      class="key {{k.special ? 'special' : ''}} {{k.key === curKey ? 'cur' : ''}} {{k.key === nextKey && k.key !== curKey ? 'next' : ''}} {{k.key === pressedKey ? 'pressed' : ''}} {{k.key === errKey ? 'err' : ''}} {{heat[k.key] ? 'heat' + heat[k.key] : ''}}"
+      class="key {{k.special ? 'special' : ''}} {{k.key === curKey ? 'cur' : ''}} {{k.key === nextKey && k.key !== curKey ? 'next' : ''}} {{k.key === pressedKey ? 'pressed' : ''}} {{k.key === pressedKey ? pressedClass : ''}} {{k.key === errKey ? 'err' : ''}} {{k.key === errKey ? errClass : ''}} {{heat[k.key] ? 'heat' + heat[k.key] : ''}}"
       data-key="{{k.key}}"
       hover-class="hover" hover-stay-time="60"
       bindtap="onTap">

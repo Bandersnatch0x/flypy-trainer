@@ -38,14 +38,33 @@
 }
 .key.hover { background: #222; }
 .key.pressed { transform: scale(0.94); background: #24343a; border-color: var(--accent); }
+.key.pressed-a, .key.pressed-b { animation-duration: 90ms; animation-timing-function: ease-out; }
+.key.pressed-a { animation-name: kbpress-a; }
+.key.pressed-b { animation-name: kbpress-b; }
 .key.cur { border-color: var(--accent); box-shadow: 0 0 12rpx rgba(0, 242, 255, 0.45); }
 .key.cur .sm { color: var(--accent); }
 .key.next { border-color: rgba(0, 242, 255, 0.35); }
-.key.err { border-color: var(--err); box-shadow: 0 0 12rpx rgba(255, 23, 68, 0.5); animation: kbshake 130ms; }
+.key.err { border-color: var(--err); box-shadow: 0 0 12rpx rgba(255, 23, 68, 0.5); }
+.key.err-a, .key.err-b { animation-duration: 130ms; animation-timing-function: ease-out; }
+.key.err-a { animation-name: kbshake-a; }
+.key.err-b { animation-name: kbshake-b; }
 .key.heat1 { background: rgba(196, 87, 78, 0.22); }
 .key.heat2 { background: rgba(196, 87, 78, 0.5); }
 .key.heat3 { background: rgba(196, 87, 78, 0.85); }
-@keyframes kbshake {
+@keyframes kbpress-a {
+  0%, 100% { transform: translateY(0) scale(1); }
+  45% { transform: translateY(2px) scale(0.94); }
+}
+@keyframes kbpress-b {
+  0%, 100% { transform: translateY(0) scale(1); }
+  45% { transform: translateY(2px) scale(0.94); }
+}
+@keyframes kbshake-a {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4rpx); }
+  75% { transform: translateX(4rpx); }
+}
+@keyframes kbshake-b {
   0%, 100% { transform: translateX(0); }
   25% { transform: translateX(-4rpx); }
   75% { transform: translateX(4rpx); }

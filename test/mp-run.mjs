@@ -299,5 +299,7 @@ console.log('== 五笔画（SPEC-0004 §3 小程序同步）==');
   engine.setScheme(fly);
 }
 
+await import('./mp-practice.mjs');
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

@@ -6,7 +6,9 @@ Component({
     curKey: { type: String, value: '' },     // 当前步高亮
     nextKey: { type: String, value: '' },    // 下一步预亮
     pressedKey: { type: String, value: '' }, // 命中按压
+    pressedClass: { type: String, value: 'pressed-a' },
     errKey: { type: String, value: '' },     // 错按红闪
+    errClass: { type: String, value: 'err-a' },
     heat: { type: Object, value: {} },       // 错键热力：{键: 0-3 级}
   },
   methods: {
