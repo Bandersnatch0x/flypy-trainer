@@ -1,22 +1,43 @@
 <view class="page">
+  <!-- 顶部操作栏 -->
   <view class="actions">
     <button class="btn primary" bindtap="train" disabled="{{empty}}">开始强化</button>
-    <button class="btn" bindtap="exportRime" disabled="{{empty}}">导出输入法短语</button>
-    <button class="btn ghost" bindtap="clear" disabled="{{empty}}">清空</button>
+    <button class="btn ghost" bindtap="exportRime" disabled="{{empty}}">导出短语</button>
+    <button class="btn ghost danger" bindtap="clear" disabled="{{empty}}">清空</button>
   </view>
-  <view class="note">错词按「{{schemeName}}」记账；展示码随当前方案重派。</view>
 
+  <!-- 方案说明提示条 -->
+  <view class="note-bar">
+    <text class="note-icon">ℹ</text>
+    <text class="note-txt">错词按「{{schemeName}}」记账；展示码随当前方案重派</text>
+  </view>
+
+  <!-- 空状态 -->
   <view wx:if="{{empty}}" class="emptywrap">
-    <view class="big">∅</view>
-    <view>还没有错过，继续</view>
-    <view class="sub">词库全方案通用，立即可练</view>
+    <view class="empty-icon-wrap">
+      <view class="empty-icon-inner">✓</view>
+    </view>
+    <view class="empty-title">还没有错词记录</view>
+    <view class="empty-sub">练习中产生的错词会自动收录于此，随时可专项强化</view>
+    <button class="btn primary empty-btn" bindtap="goPractice">去练习</button>
   </view>
 
-  <view wx:else class="card mklist">
-    <view wx:for="{{list}}" wx:key="word" class="mk">
-      <text class="w">{{item.word}}</text>
-      <text class="c mono">{{item.shown}}</text>
-      <text class="n">错 {{item.n}} 次</text>
+  <!-- 错词列表 -->
+  <view wx:else class="list-wrap">
+    <view class="list-head">
+      <text class="list-title">错词列表</text>
+      <text class="list-badge">共 {{count}} 词</text>
+    </view>
+    <view class="card mklist">
+      <view wx:for="{{list}}" wx:key="word" class="mk">
+        <view class="mk-left">
+          <text class="w">{{item.word}}</text>
+          <text class="c mono">{{item.shown}}</text>
+        </view>
+        <view class="mk-right">
+          <text class="tag">错 {{item.n}} 次</text>
+        </view>
+      </view>
     </view>
   </view>
 </view>

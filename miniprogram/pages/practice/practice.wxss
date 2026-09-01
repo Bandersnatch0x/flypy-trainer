@@ -52,25 +52,43 @@
 .resgrid view { display: flex; flex-direction: column; align-items: center; }
 .resgrid .b { font-size: 48rpx; color: var(--accent); }
 .resgrid .t { font-size: 24rpx; color: var(--ghost); margin-top: 8rpx; }
-.resbtns { display: flex; gap: 24rpx; justify-content: center; }
-.resbtns .btn { padding: 16rpx 24rpx; }
-.reshome { text-align: center; color: var(--ghost); font-size: 24rpx; margin-top: 24rpx; }
+.resbtns { display: flex; gap: 16rpx; justify-content: space-between; width: 100%; }
+.resbtns .btn {
+  flex: 1;
+  height: 76rpx;
+  padding: 0 8rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26rpx;
+  font-weight: 500;
+  white-space: nowrap;
+  border-radius: 14rpx;
+}
+.reshome { text-align: center; color: var(--ghost); font-size: 26rpx; margin-top: 28rpx; padding: 16rpx 0; transition: color 0.15s, opacity 0.15s; }
+.link-hover { color: var(--accent); opacity: 0.8; }
 
 .btn {
   font-size: 28rpx; padding: 16rpx 40rpx; border-radius: 12rpx;
   background: var(--surface); color: var(--text); border: 2rpx solid var(--stroke);
+  transition: opacity 0.15s, background-color 0.15s, border-color 0.15s;
 }
 .btn.primary { background: rgba(0, 242, 255, 0.12); border-color: var(--accent); color: var(--accent); }
 
 .fnrow {
-  display: flex; gap: 12rpx; justify-content: center;
-  padding: 16rpx 0 calc(16rpx + env(safe-area-inset-bottom));
+  display: flex; gap: 12rpx; justify-content: space-between;
+  width: 100%; max-width: 820rpx; margin: 0 auto; box-sizing: border-box;
+  padding: 16rpx 8rpx calc(16rpx + env(safe-area-inset-bottom));
 }
 .fnbtn {
-  padding: 12rpx 28rpx; font-size: 24rpx; color: var(--ghost);
+  flex: 1; min-height: 74rpx;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 26rpx; color: var(--ghost);
   background: var(--surface); border: 2rpx solid var(--stroke); border-radius: 10rpx;
+  transition: opacity 0.1s, color 0.1s, border-color 0.1s, background-color 0.1s; white-space: nowrap; padding: 0 4rpx;
 }
-.fnbtn.on { color: var(--accent); border-color: rgba(0, 242, 255, 0.4); }
+.fnbtn:active { opacity: 0.75; background: rgba(255, 255, 255, 0.05); }
+.fnbtn.on { color: var(--accent); border-color: rgba(0, 242, 255, 0.4); background: rgba(0, 242, 255, 0.06); font-weight: 500; }
 
 .sysinput { position: fixed; left: -9999rpx; top: 0; opacity: 0; }
 .postercanvas { position: fixed; left: -9999px; top: 0; width: 900px; height: 500px; }

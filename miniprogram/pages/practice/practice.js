@@ -8,6 +8,10 @@ const { hiddenModesFor } = require('../../utils/schemes-ui.js');
 const { buildRows, streakOf, MODES } = require('../../utils/ui.js');
 const { planUnitAt } = require('../../utils/jyutping.js');
 
+// 保留 Web 端的按下/错闪时序；两种反馈必须分别计时，避免相互覆盖。
+const PRESSED_FLASH_MS = 90;
+const ERROR_FLASH_MS = 130;
+
 function charStatesOf(word, plan, pos, total) {
   const groups = (plan && plan.groups) || [];
   const chars = [...String(word)];
@@ -33,6 +37,7 @@ Page({
     fb: '', steps: [], prog: 0,
     timeStr: '0:00', speed: '0', acc: '100%', combo: 0,
     curKey: '', nextKey: '', pressedKey: '', errKey: '',
+    pressedClass: 'pressed-a', errClass: 'err-a',
     kbRows: [], keyboardMode: 'vkb', sysFocus: false,
     soundOn: false, showCode: true, wrongPunish: false, keyImpact: true,
     result: null,
@@ -43,6 +48,9 @@ Page({
     this.pendingDrill = getApp().drill || null; // 课程页操练入口：{st, first, seq}
     if (this.pendingDrill) this.pendingMode = 'finaldrill';
     this.timer = null;
+    this.pressedKeyTimer = null;
+    this.errKeyTimer = null;
+    this.flashSeq = { pressed: 0, err: 0 };
   },
 
   onShow() {
@@ -55,17 +63,29 @@ Page({
         keyboardMode: settings.keyboardMode === 'system' ? 'system' : 'vkb',
         sysFocus: settings.keyboardMode === 'system',
       });
-      if (this.data.active) this.render();
+      if (this.data.active) {
+        this.render();
+        if (!this.timer) this.timer = setInterval(() => this.tick(), 500);
+      }
       return;
     }
     this.init(schemeId);
   },
 
-  onUnload() { if (this.timer) clearInterval(this.timer); },
-  onHide() { if (this.timer) { clearInterval(this.timer); this.timer = null; } },
+  onUnload() {
+    if (this.timer) { clearInterval(this.timer); this.timer = null; }
+    this.clearKeyFlashTimers();
+  },
+  onHide() {
+    if (this.timer) { clearInterval(this.timer); this.timer = null; }
+    this.clearKeyFlashTimers();
+    this.clearKeyFlashState();
+  },
 
   async init(schemeId) {
     this._shown = true;
+    this.clearKeyFlashTimers();
+    this.clearKeyFlashState();
     const settings = store.getSettings();
     this.scheme = getScheme(schemeId);
     engine.setScheme(this.scheme);
@@ -111,6 +131,7 @@ Page({
 
   start(mode) {
     if (this.timer) { clearInterval(this.timer); this.timer = null; }
+    this.clearKeyFlashTimers();
     let r;
     if (mode === 'finaldrill' && this.pendingDrill) {
       const d = this.pendingDrill;
@@ -121,10 +142,10 @@ Page({
       r = engine.startSession(mode);
     }
     if (r.status !== 'ok') {
-      this.setData({ mode, active: false, result: null, emptyMsg: this.emptyMsg(r.status), fb: '', curKey: '', nextKey: '', prog: 0 });
+      this.setData({ mode, active: false, result: null, emptyMsg: this.emptyMsg(r.status), fb: '', curKey: '', nextKey: '', pressedKey: '', errKey: '', prog: 0 });
       return;
     }
-    this.setData({ mode, active: true, result: null, emptyMsg: '' });
+    this.setData({ mode, active: true, result: null, emptyMsg: '', pressedKey: '', errKey: '' });
     this.render();
     this.timer = setInterval(() => this.tick(), 500);
   },
@@ -158,21 +179,76 @@ Page({
     const r = engine.press(ch);
     if (!r) return;
     if (r.ok) {
-      this.setData({ pressedKey: this.data.keyImpact ? ch : '', errKey: '', fb: '' });
-      if (this.data.keyImpact) setTimeout(() => { if (this.data.pressedKey === ch) this.setData({ pressedKey: '' }); }, 90);
-      if (r.sessionDone) { this.showResult(r.result); return; }
-      this.render();
+      const pressed = this.prepareKeyFlash('pressed', this.data.keyImpact ? ch : '');
+      this.invalidateKeyFlash('err');
+      const feedback = { ...pressed, errKey: '', fb: '' };
+      if (r.sessionDone) {
+        this.showResult(r.result, { preserveFlash: true, feedback });
+        return;
+      }
+      this.render(feedback);
     } else {
       if (this.data.keyImpact) wx.vibrateShort({ type: 'light', fail: () => {} });
-      this.setData({ errKey: ch, fb: r.feedback });
-      setTimeout(() => { if (this.data.errKey === ch) this.setData({ errKey: '' }); }, 130);
-      if (r.cleared) this.render(); else this.renderMetrics();
+      this.invalidateKeyFlash('pressed');
+      const err = this.prepareKeyFlash('err', ch);
+      if (r.cleared) {
+        this.render({ ...err, pressedKey: '', fb: r.feedback });
+      } else {
+        const snap = engine.snapshot();
+        this.setData({
+          ...err,
+          pressedKey: '',
+          fb: r.feedback,
+          acc: snap.acc + '%',
+          combo: snap.combo,
+        });
+      }
     }
     if (this.data.keyboardMode === 'system') this.setData({ sysFocus: true });
   },
 
-  // ---- 渲染 ----
-  render() {
+  // 每次反馈切换 class 变体，让同一键连续击打也能触发一次新的 CSS 动画。
+  prepareKeyFlash(type, key) {
+    const keyProp = type === 'pressed' ? 'pressedKey' : 'errKey';
+    const classProp = type === 'pressed' ? 'pressedClass' : 'errClass';
+    const timerProp = type === 'pressed' ? 'pressedKeyTimer' : 'errKeyTimer';
+    const delay = type === 'pressed' ? PRESSED_FLASH_MS : ERROR_FLASH_MS;
+    if (this[timerProp] !== null) clearTimeout(this[timerProp]);
+    const seq = (this.flashSeq[type] || 0) + 1;
+    this.flashSeq[type] = seq;
+    const className = `${type}-${seq % 2 ? 'b' : 'a'}`;
+    if (key) {
+      this[timerProp] = setTimeout(() => {
+        if (this.flashSeq[type] !== seq) return;
+        this[timerProp] = null;
+        if (this.data[keyProp] === key) this.setData({ [keyProp]: '' });
+      }, delay);
+    } else {
+      this[timerProp] = null;
+    }
+    return { [keyProp]: key || '', [classProp]: className };
+  },
+
+  invalidateKeyFlash(type) {
+    const timerProp = type === 'pressed' ? 'pressedKeyTimer' : 'errKeyTimer';
+    if (this[timerProp] !== null) clearTimeout(this[timerProp]);
+    this[timerProp] = null;
+    this.flashSeq[type] = (this.flashSeq[type] || 0) + 1;
+  },
+
+  clearKeyFlashTimers() {
+    this.invalidateKeyFlash('pressed');
+    this.invalidateKeyFlash('err');
+  },
+
+  clearKeyFlashState() {
+    if (this.data.pressedKey || this.data.errKey) {
+      this.setData({ pressedKey: '', errKey: '' });
+    }
+  },
+
+  // ---- 渲染（单帧批处理，避免高频跨线程碎片调用） ----
+  render(extra = {}) {
     const snap = engine.snapshot();
     if (!snap.active) return;
     const it = snap.current;
@@ -181,7 +257,7 @@ Page({
     const at = planUnitAt(snap.planKeys, snap.pos);
     const curUnit = at && at.unit;
     const nxtUnit = at && snap.planKeys[at.index + 1];
-    this.setData({
+    const payload = {
       charStates: charStatesOf(it.word, it.plan, snap.pos, snap.expected.length),
       py: it.py.replace(/\s+/g, ' '),
       display: it.display,
@@ -191,11 +267,13 @@ Page({
       curKey: hl && curUnit ? curUnit.key : '',
       nextKey: hl && nxtUnit && (!curUnit || nxtUnit.key !== curUnit.key) ? nxtUnit.key : '',
       combo: snap.combo,
+      acc: snap.acc + '%',
       prog: this.data.mode === 'sprint' ? this.data.prog : Math.round((snap.idx / snap.queueLength) * 100),
       done: this.data.mode === 'sprint' ? String(snap.doneWords) : `${snap.idx}/${snap.queueLength}`,
       timeStr: this.data.mode === 'sprint' ? `0:${engine.SPRINT_SECS}` : this.data.timeStr,
-    });
-    this.renderMetrics();
+      ...extra,
+    };
+    this.setData(payload);
   },
 
   renderMetrics() {
@@ -209,28 +287,32 @@ Page({
     const total = snap.correctKeys + snap.wrongKeys;
     if (this.data.mode === 'sprint') {
       const left = engine.sprintLeft();
-      this.setData({
-        timeStr: `0:${String(left).padStart(2, '0')}`,
-        prog: Math.round(((engine.SPRINT_SECS - left) / engine.SPRINT_SECS) * 100),
-      });
       if (left <= 0) { this.showResult(engine.timeUp()); return; }
-      if (snap.startTime) this.setData({ speed: String(Math.round(total / ((Date.now() - snap.startTime) / 60000))) });
+      const newTimeStr = `0:${String(left).padStart(2, '0')}`;
+      const newProg = Math.round(((engine.SPRINT_SECS - left) / engine.SPRINT_SECS) * 100);
+      const newSpeed = snap.startTime ? String(Math.round(total / ((Date.now() - snap.startTime) / 60000))) : this.data.speed;
+      if (newTimeStr !== this.data.timeStr || newSpeed !== this.data.speed) {
+        this.setData({ timeStr: newTimeStr, prog: newProg, speed: newSpeed });
+      }
     } else if (snap.startTime) {
       const el = Math.floor((Date.now() - snap.startTime) / 1000);
-      this.setData({
-        timeStr: `${Math.floor(el / 60)}:${String(el % 60).padStart(2, '0')}`,
-        speed: String(Math.round(total / ((Date.now() - snap.startTime) / 60000))),
-      });
+      const newTimeStr = `${Math.floor(el / 60)}:${String(el % 60).padStart(2, '0')}`;
+      const newSpeed = String(Math.round(total / ((Date.now() - snap.startTime) / 60000)));
+      if (newTimeStr !== this.data.timeStr || newSpeed !== this.data.speed) {
+        this.setData({ timeStr: newTimeStr, speed: newSpeed });
+      }
     }
   },
 
-  showResult(result) {
+  showResult(result, options = {}) {
     if (!result) return;
     if (this.timer) { clearInterval(this.timer); this.timer = null; }
+    if (!options.preserveFlash) this.clearKeyFlashTimers();
     this.setData({
       result,
       active: false,
       curKey: '', nextKey: '',
+      ...(options.preserveFlash ? options.feedback : { pressedKey: '', errKey: '' }),
       resTime: `${Math.floor(result.secs / 60)}:${String(result.secs % 60).padStart(2, '0')}`,
     });
   },

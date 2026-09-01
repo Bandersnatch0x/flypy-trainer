@@ -4,5 +4,8 @@ docs/
 .scratch/
 tools/.cache/
 
+# 微信开发者工具的机器本地配置（个人编译条件 / 预览设置，不应共享）
+project.private.config.json
+
 .vercel
 .tmp-*.bat

@@ -11,8 +11,8 @@
     <view class="feat">{{flagship.feat}}</view>
     <view wx:if="{{flagship.summary}}" class="progress">{{flagship.summary}}</view>
     <view class="state"><text class="formtag">{{flagship.form}}</text><text class="datastate">{{flagship.dataState}}</text></view>
-    <view wx:if="{{flagship.isCur}}" class="inuse">使用中</view>
-    <button wx:else class="btn primary" data-id="flypy" bindtap="applyScheme">切换开练</button>
+    <view wx:if="{{flagship.isCur}}" class="inuse"><text class="inuse-icon">✓</text><text>当前使用中</text></view>
+    <button wx:else class="btn primary" hover-class="btn-hover" data-id="flypy" bindtap="applyScheme">切换开练</button>
   </view>
 
   <!-- 分组 -->
@@ -25,8 +25,8 @@
       <view class="feat">{{c.feat}}</view>
       <view class="state"><text class="formtag">{{c.form}}</text><text class="datastate">{{c.dataState}}</text>
         <text wx:if="{{c.summary}}" class="sum"> · {{c.summary}}</text></view>
-      <view wx:if="{{c.isCur}}" class="inuse">使用中</view>
-      <button wx:else class="btn ghost" data-id="{{c.id}}" bindtap="applyScheme">切换开练</button>
+      <view wx:if="{{c.isCur}}" class="inuse"><text class="inuse-icon">✓</text><text>当前使用中</text></view>
+      <button wx:else class="btn ghost" hover-class="btn-hover" data-id="{{c.id}}" bindtap="applyScheme">切换开练</button>
     </view>
   </view>
 </view>

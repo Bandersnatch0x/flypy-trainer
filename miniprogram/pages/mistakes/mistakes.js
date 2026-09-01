@@ -14,6 +14,7 @@ Page({
     this.setData({
       schemeName: this.scheme.name,
       empty: !mk.length,
+      count: mk.length,
       list: mk.slice(0, 60).map(m => ({
         word: m.word,
         shown: this.scheme.codeOf({ word: m.word, py: m.py, srcCode: m.srcCode, srcScheme: m.srcScheme }) || m.py || '—',
@@ -23,6 +24,8 @@ Page({
   },
 
   train() { wx.navigateTo({ url: '/pages/practice/practice?mode=mistakes' }); },
+
+  goPractice() { wx.navigateTo({ url: '/pages/practice/practice' }); },
 
   clear() {
     wx.showModal({

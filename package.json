@@ -5,6 +5,7 @@
     "build:packs": "node tools/build-packs.mjs"
   },
   "devDependencies": {
+    "miniprogram-automator": "0.12.1",
     "playwright-core": "^1.62.1",
     "typescript": "^7.0.2"
   },
