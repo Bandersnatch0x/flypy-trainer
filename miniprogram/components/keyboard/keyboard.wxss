@@ -49,10 +49,9 @@
 .key.err-a { animation-name: kbshake-a; }
 .key.err-b { animation-name: kbshake-b; }
 .key.heat1 { background: rgba(196, 87, 78, 0.22); }
-/* p-a/p-b、e-a/e-b 动画体相同，仅 animation-name 不同：切类即重启动画，连击同一键也能重播 */
-@keyframes kbpress-a {
 .key.heat2 { background: rgba(196, 87, 78, 0.5); }
 .key.heat3 { background: rgba(196, 87, 78, 0.85); }
+/* p-a/p-b、e-a/e-b 动画体相同，仅 animation-name 不同：切类即重启动画，连击同一键也能重播 */
 @keyframes kbpress-a {
   0%, 100% { transform: translateY(0) scale(1); }
   45% { transform: translateY(2px) scale(0.94); }
