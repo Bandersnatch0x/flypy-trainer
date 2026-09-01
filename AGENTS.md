@@ -58,3 +58,20 @@ consent gate.
 distribution and the named attributions. Requires an automation session:
 `cli auto --project <repo root> --auto-port 9420`. Run it before shipping any change to
 `miniprogram/pages/licenses/`, `miniprogram/pages/mine/` or `miniprogram/data/packs/`.
+
+### `.wxss` / `.wxml` 改动：Node 测试不构成门禁
+
+`test/mp-run.mjs` 只跑纯 JS 回归——它 **不编译** `.wxss` / `.wxml`。样式与模板的语法错误
+（未闭合块、标签错配）在 Node 侧全绿，却让小程序编译直接失败。
+
+改动这两类文件后，唯一有效的验证是走微信开发者工具真实编译：
+
+```
+cli.bat upload --project <repo root> -v <ver> -d <desc>   # 或 cli.bat preview
+```
+
+CLI 在 `D:\Program Files (x86)\Tencent\微信web开发者工具\cli.bat`。在此之前不得宣称门禁通过。
+
+事故实录：`66e0f61` 补注释时把 `@keyframes kbpress-a {` 误插到 `.key.heat2` 前，
+`keyboard.wxss` 块未闭合。`mp-run.mjs` 94 passed，据此判定"门禁绿"并合入 main，
+缺陷直到 `cli upload` 报 `Unclosed block` 才暴露（修复 `bd52060`）。
